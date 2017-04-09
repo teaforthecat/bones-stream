@@ -13,10 +13,21 @@
   (:import [franzy.clients.producer.types ProducerRecord])
   )
 
+(defn spy [segment]
+  (println "hi from spy")
+  (if (:key segment)
+    (let [new-segment (update segment :key unserfun)]
+      (println new-segment)
+      new-segment)))
+
+
 (defn redis-write [redi channel message]
-  (spit "onyx.log" "hello from redis-write")
+  (println "hi from redis write")
+  (println redi)
+  (println channel)
+  (println message)
   (let [k (:key message)
-        v (:value message)]
+        v (:message message)]
     (redis/write redi channel k v)
     (redis/publish redi channel message)))
 
@@ -27,20 +38,22 @@
 (defn bare-catalog [fn-sym]
   [{:onyx/name :bones/input
     :onyx/type :input
+    :onyx/fn ::spy
     :onyx/medium :kafka
     :onyx/plugin :onyx.plugin.kafka/read-messages
     :onyx/max-peers 1 ;; for read exactly once
-    :onyx/batch-size 50
+    :onyx/batch-size 1
     :kafka/zookeeper "localhost:2181"
     :kafka/topic "test"
     :kafka/deserializer-fn ::unserfun
-    :kafka/offset-reset :earliest
+    :kafka/offset-reset :latest
+    :kafka/wrap-with-metadata? true
     }
 
    {:onyx/name :processor
     :onyx/type :function
     :onyx/max-peers 1
-    :onyx/batch-size 1 ;; turns 1 segment to 2
+    :onyx/batch-size 1
     :onyx/fn fn-sym}
 
    {:onyx/name :bones/output
@@ -48,9 +61,10 @@
     :onyx/fn ::redis-write
     :onyx/medium :function
     :onyx/plugin :onyx.peer.function/function
-    :onyx/params ["test"] ;; seccond parameter to redis-write (the channel); after :onyx.peer/fn-params
+    ::channel "test"
+    :onyx/params [::channel] ;; seccond parameter to redis-write (the channel); after :onyx.peer/fn-params
     ;; 3 segments at a time, one for publish, one for set, one for sadd(key to set)
-    :onyx/batch-size 3
+    :onyx/batch-size 1
     }
    ;; waiting on onyx-redis
    #_{:onyx/name :bones/output
