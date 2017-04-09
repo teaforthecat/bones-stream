@@ -20,7 +20,7 @@
 ;;    {:op :publish :args ["test" segment]}] )
 
 (defn abc [segment]
-  (spit "onyx.log" "hello from abc")
+  (println "hello from abc")
   segment)
 
 (deftest workflow
@@ -78,12 +78,14 @@
 
 (deftest job
   (let [
-        redis (component/start (bones.stream.redis/map->Redis {:channel-prefix ""}))
+        redis (component/start (bones.stream.redis/map->Redis {}))
         config (load-config "dev-config.edn")
+        topic "test"
+
         tenancy-id (UUID/randomUUID)
         env-config (assoc (:env-config config) :onyx/tenancy-id tenancy-id)
         peer-config (assoc (:peer-config config) :onyx/tenancy-id tenancy-id
-                           :onyx.peer/fn-params {::kafka/redis-write redis})
+                           :onyx.peer/fn-params {:bones/output [redis]})
 
 
         command-ns ::abc
@@ -93,13 +95,20 @@
              :task-scheduler :onyx.task-scheduler/balanced}
         bones-job (component/start (kafka/map->Job {:onyx-job job}))]
 
-    (kafka/input bones-job {:topic "test"
-                            :message {:hi "yo" :ya "watsup"}})
-
     (with-test-env [test-env [3 env-config peer-config]]
-            (onyx.api/submit-job peer-config job)
+      (onyx.api/submit-job peer-config job)
+      ;; time needed to start the job and start the consumer
+      (Thread/sleep 8000)
 
-      ;; (is (= "wat" (.fetch-all (bones.stream.redis/map->Redis {}) "test")))
+      (kafka/input bones-job {:topic "test"
+                              :key "125"
+                              :message {:hi "yo" :ya "watsup"}})
+
+      ;; way more time than needed to allow the segment to flow
+      (Thread/sleep 1000)
+      ;; value is the same as message
+      (is (= {:key "125", :value {"hi" "yo", "ya" "watsup"}}
+             (first @(.fetch-all (bones.stream.redis/map->Redis {}) "test"))))
       )))
 
 
