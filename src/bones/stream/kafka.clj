@@ -16,7 +16,7 @@
   ;; :kafka/wrap-with-metadata? must be set to true to get the key
   (if (:key segment)
     ;; key is not de-serialized by onyx-kafka; must be an oversight
-    (let [new-segment (update segment :key unserfun)]
+    (let [new-segment 1 #_(update segment :key unserfun)]
       new-segment)))
 
 (defn redis-write [redi channel message]
@@ -31,7 +31,7 @@
 (defn input-task [topic conf]
   (merge {:onyx/name :bones/input
           :onyx/type :input
-          :onyx/fn ::fix-key
+          :onyx/fn ::fix-key ;; preprocessor
           :onyx/medium :kafka
           :onyx/plugin :onyx.plugin.kafka/read-messages
           :onyx/max-peers 1 ;; for read exactly once
@@ -88,15 +88,15 @@
 
 ;; not sure if this will work
 ;; where/when to call this? user only?
-;; the ::serfun needs to resolve
-;; they need to match
-;; provide :kafka/serializer-fn to override
+;; 1. the ::serfun needs to resolve
+;; 2. they need to match
+;; 3. provide :kafka/serializer-fn to override
 (defn serialization-format
   ([]
    (serialization-format :json-plain))
   ([fmt]
-   (def serfun (serializer/encoder fmt))
-   (def unserfun (serializer/decoder fmt))))
+   (def serfun (serializer/encoder (or fmt :json-plain)))
+   (def unserfun (serializer/decoder (or fmt :json-plain)))))
 
 ;; (serialization-format)
 
@@ -151,19 +151,30 @@
   (start [cmp]
     ;; look for the :bones/input task to reuse kafka connection info
     (let [input-task (first (filter #(= :bones/input (:onyx/name %)) (:catalog (:onyx-job cmp))))
-          peer-config (:peer-config conf)
-          env-config (:env-config conf)]
+          peer-config (get-in cmp [:conf :stream :peer-config])
+          env-config (get-in cmp [:conf :stream :env-config])
+          ;; job-id defaults to topic, used to kill-job
+          job-id (get-in cmp
+                         [:onyx-job :metadata :job-id]
+                         (:kafka/topic input-task))]
 
       ;; this seems pretty neat
-      (onyx.api/submit-job peer-config (:onyx-job cmp))
+      (onyx.api/submit-job peer-config
+                           ;; job-id makes this idempotent
+                           (assoc-in (:onyx-job cmp)
+                                      [:metadata :job-id]
+                                      job-id))
 
 
       ;; use all the values set for the kafka reader for this kafka writer
       ;; (mainly topic)
-      (assoc cmp :producer (producer input-task))))
+      (assoc cmp :producer (producer input-task)
+                 :job-id job-id)))
   (stop [cmp]
-    (.close (:producer cmp)) ;; is this right?
-    (assoc cmp :producer nil))
+    (let [peer-config (get-in cmp [:conf :stream :peer-config])]
+      (.close (:producer cmp)) ;; is this right?
+      (onyx.api/kill-job peer-config (:job-id cmp))
+      (assoc cmp :producer nil)))
   InputOutput
   ;; returns result from kafka :offset,etc.
   (input [cmp msg]
@@ -173,15 +184,7 @@
                   (message->producer-record serializer-fn
                                             topic
                                             msg))))
-  (output [cmp channel stream] ;; provide ms/stream
-    (redis/consume (:redis cmp) stream)
-    (let []
-      ;; needs :spec {:host "x" :port n}
-      ;; (get-in cmp [:conf :stream :redis])
-      (.consume (bones.stream.redis/map->Redis {:spec {:host host
-                                                       :port port}})
-                stream)
-      )
+  (output [cmp stream] ;; provide ms/stream
+    ;; redis provided by component's start-system
+    (redis/subscribe (:redis cmp) (get-in cmp [:producer :topic]) stream)
     cmp))
-
-

@@ -14,14 +14,25 @@
   (swap! system component/update-system-reverse components component/stop))
 
 (defn build-system [sys config]
+  ;; sets the vars that are used by onyx plugins
+  (kafka/serialization-format (get-in config [:conf :stream :serialization-format]))
   (swap! sys #(-> %
                   (assoc :conf config)
-                  (assoc :producer (component/using (kafka/map->Producer {}) [:conf]))
-                  (assoc :consumer (component/using (kafka/map->Consumer {}) [:conf]))
-                  (assoc :redis (component/using (redis/map->Redis {}) [:conf])))))
+                  (assoc :redis (component/using (redis/map->Redis {}) [:conf]))
+                  (assoc :job (component/using (kafka/map->Job {}) [:conf :redis])))))
 
 (defn start [sys]
-  (start-systems sys :producer :consumer :redis :conf))
+  (start-systems sys :job :redis :conf))
 
 (defn stop [sys]
-  (stop-systems sys :producer :consumer :redis))
+  (stop-systems sys :job :redis))
+
+
+(comment
+
+  (def system (atom {}))
+  (build-system system {})
+
+  (start system)
+
+  )
