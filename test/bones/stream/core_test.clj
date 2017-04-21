@@ -1,12 +1,49 @@
 (ns bones.stream.core-test
-  (:require [onyx-local-rt.api :as api]
-            [clojure.test :refer [deftest is testing]]))
+  (:require #_[onyx-local-rt.api :as api] ;; not yet
+            [bones.stream.core :as stream]
+            [bones.stream.kafka :as k] ;; needed for finding functions
+            [bones.conf :as conf]
+            [clojure.test :refer [deftest is testing]]
+            [manifold.stream :as ms]))
+
+(comment
+  ;; create global state
+(def system (atom {}))
+
+;; glue components together
+(stream/build-system system (conf/map->Conf {:conf-files ["resources/dev-config.edn"]}))
+
+;; attach job
+(swap! system assoc-in [:job :onyx-job] (k/bare-job ::my-inc))
+
+;; start job, connect to redis, kafka
+(stream/start system)
+
+;; test
+(get-in @system [:conf :stream :peer-config])
+
+;; test
+(get-in @system [:job :producer :producer])
+
+;; input message
+(k/input (:job @system) {:key "123456"
+                         :message {:command "move"
+                                   :args ["right"]}})
+
+(def outputter (ms/stream))
+
+;; listen for message
+(ms/consume println outputter)
+
+(k/output (:job @system) outputter)
+)
 
 ;; ^:export the function if using in ClojureScript.
 (defn ^:export my-inc [segment]
   (update-in segment [:n] inc))
 
 (def test-state (atom nil))
+
 
 (defn update-atom! [event window trigger {:keys [lower-bound upper-bound event-type] :as state-event} extent-state]
   (reset! test-state extent-state))
