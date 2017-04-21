@@ -25,7 +25,7 @@
     (redis/write redi channel k v)
     (redis/publish redi channel message)))
 
-(defn bare-workflow [fn-sym]
+(defn bare-workflow []
   [[:bones/input :bones/output]])
 
 (defn input-task [topic conf]
@@ -62,6 +62,24 @@
 (defn bare-lifecycles [fn-sym]
   [{:lifecycle/task :bones/input
     :lifecycle/calls :onyx.plugin.kafka/read-messages-calls}])
+
+(defn sym-to-topic
+  "generate a kafka-acceptable topic name
+  (sym-to-topic :a.b/c) => \"a.b..c\" "
+  [^clojure.lang.Keyword job-sym]
+  (-> (str job-sym)
+      (clojure.string/replace "/" "..") ;; / is illegal in kafka topic name
+      (subs 1))) ;; remove leading colon
+
+(defn bare-job
+  "bare minimum"
+  ([fn-sym]
+   (bare-job fn-sym (sym-to-topic fn-sym)))
+  ([fn-sym topic]
+   {:workflow (bare-workflow)
+    :catalog (bare-catalog fn-sym topic)
+    :lifecycles (bare-lifecycles fn-sym)
+    :task-scheduler :onyx.task-scheduler/balanced}))
 
 ;; taken from onyx.plugin.kafka because it is private
 (defn message->producer-record
