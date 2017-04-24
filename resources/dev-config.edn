@@ -7,7 +7,7 @@
    :onyx.bookkeeper/local-quorum-ports [3196 3197 3198]
    :onyx.bookkeeper/port 3196
    :zookeeper/address "127.0.0.1:2181"
-   :zookeeper/server? true
+   :zookeeper/server? false
    :zookeeper.server/port 2181}
 
   :peer-config
@@ -18,4 +18,5 @@
    :onyx.messaging/impl :aeron
    :onyx.messaging/bind-addr "localhost"
    :onyx.messaging/peer-port 40200
-   :onyx.messaging.aeron/embedded-driver? true}}}
+   :onyx.messaging.aeron/embedded-driver? false
+   }}}

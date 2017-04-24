@@ -3,6 +3,7 @@
             [bones.stream.core :as stream]
             [bones.stream.kafka :as k] ;; needed for finding functions
             [bones.conf :as conf]
+            [onyx.test-helper :refer [with-test-env load-config]]
             [clojure.test :refer [deftest is testing]]
             [manifold.stream :as ms]))
 
@@ -13,11 +14,27 @@
 ;; glue components together
 (stream/build-system system (conf/map->Conf {:conf-files ["resources/dev-config.edn"]}))
 
+(stream/start-aeron system)
+
+(stream/stop-aeron system)
+
+(stream/start-peer-group system)
+
+(stream/stop-peer-group system)
+
+(stream/start-peers system)
+
+(stream/stop-peers system)
+
+(get-in @system [:peer-group :peer-group])
+
+
 ;; attach job
 (swap! system assoc-in [:job :onyx-job] (k/bare-job ::my-inc))
 
 ;; start job, connect to redis, kafka
 (stream/start system)
+
 
 ;; test
 (get-in @system [:conf :stream :peer-config])
@@ -25,17 +42,25 @@
 ;; test
 (get-in @system [:job :producer :producer])
 
-;; input message
-(k/input (:job @system) {:key "123456"
-                         :message {:command "move"
-                                   :args ["right"]}})
-
 (def outputter (ms/stream))
 
 ;; listen for message
 (ms/consume println outputter)
 
 (k/output (:job @system) outputter)
+
+;; input message
+(k/input (:job @system) {:key "123456"
+                         :message {:command "move"
+                                   :args ["right"]}})
+
+(stream/stop-peer-env system)
+
+(stream/stop-peers system)
+
+(stream/stop system)
+
+
 )
 
 ;; ^:export the function if using in ClojureScript.
