@@ -101,3 +101,7 @@
                   (ms/transform
                    (map (partial fetch cmp))
                    rkeys))))))
+
+(defmethod clojure.core/print-method Redis
+  [system ^java.io.Writer writer]
+  (.write writer "#<bones.stream.redis/Redis>"))

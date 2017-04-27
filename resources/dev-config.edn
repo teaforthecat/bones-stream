@@ -8,11 +8,13 @@
    :onyx.bookkeeper/port 3196
    :zookeeper/address "127.0.0.1:2181"
    :zookeeper/server? true
-   :zookeeper.server/port 2181}
+   ;; 2182 for embedded zookeeper
+   :zookeeper.server/port 2182}
 
   :peer-config
   {:onyx/tenancy-id "dev"
-   :zookeeper/address "127.0.0.1:2181"
+   ;; 2182 for embedded zookeeper
+   :zookeeper/address "127.0.0.1:2182"
    :onyx.peer/job-scheduler :onyx.job-scheduler/balanced
    :onyx.peer/zookeeper-timeout 60000
    :onyx.messaging/impl :aeron
