@@ -1,9 +1,12 @@
 (ns bones.stream.redis
   (:require [com.stuartsierra.component :as component]
-            [taoensso.carmine :as car]
-            [manifold.stream :as ms]
-
-            [manifold.deferred :as d]))
+            [manifold
+             [deferred :as d]
+             [stream :as ms]]
+            [taoensso
+             [carmine :as car]
+             [timbre :refer [debug]]]
+            [bones.stream.protocols :as p]))
 
 (defn message-handler
   "returns a function that destructures a redis message and sends the good stuff
@@ -14,18 +17,6 @@
       (ms/put! stream message))))
 
 (def listeners (atom []))
-
-(defprotocol Publish
-  (publish [this user-id message]))
-
-(defprotocol Subscribe
-  (subscribe [this user-id stream]))
-
-(defprotocol MaterializedView
-  (write [this topic rkey value])
-  (fetch [this rkey])
-  (fetch-keys [this topic])
-  (fetch-all [this topic]))
 
 (defrecord Redis [conf spec channel-prefix]
   component/Lifecycle
@@ -46,12 +37,12 @@
     (reset! listeners [])
     cmp)
 
-  Publish
+  p/Publish
   (publish [cmp channel message]
     (car/wcar {:spec spec} ;; use default pool option
               (car/publish channel message)))
 
-  Subscribe
+  p/Subscribe
   (subscribe [cmp channel stream]
     ; one user/browser connection (through local pool)
     (let [listener
@@ -61,7 +52,7 @@
       (swap! listeners conj listener)
       listener))
 
-  MaterializedView
+  p/MaterializedView
   (write [cmp topic rkey value]
     (let [{:keys [spec]} cmp
           result (d/deferred)]
@@ -93,15 +84,22 @@
       result))
   (fetch-all [cmp topic]
     (let [{:keys [spec]} cmp
-          rkeys @(fetch-keys cmp topic)]
+          rkeys @(p/fetch-keys cmp topic)]
       (ms/reduce conj
                  []
                  (ms/transform
                   (map deref)
                   (ms/transform
-                   (map (partial fetch cmp))
+                   (map (partial p/fetch cmp))
                    rkeys))))))
 
 (defmethod clojure.core/print-method Redis
   [system ^java.io.Writer writer]
   (.write writer "#<bones.stream.redis/Redis>"))
+
+(defn redis-write [redi channel message]
+  (debug "redis-write: " channel " " message )
+  (let [k (:key message)
+        v (:message message)]
+    (p/write redi channel k v)
+    (p/publish redi channel message)))
