@@ -2,6 +2,8 @@
 
 work in progress 
 
+part of the [bones framework](https://github.com/teaforthecat/bones)
+
 bones.stream is a Pipeline implementation built
 on [Onyx](http://onyxplatform.org). It offers Input and Output components to
 ease the configuration and setup effort. It has the goal of a slim
