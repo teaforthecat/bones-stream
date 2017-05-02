@@ -10,13 +10,10 @@
 ;; 1. the ::serfun needs to resolve
 ;; 2. they need to match
 ;; 3. provide :kafka/serializer-fn to override
-(defn serialization-format
-  ([]
-   (serialization-format :json-plain))
-  ([fmt]
-   (def serfun (serializer/encoder (or fmt :json-plain)))
-   (def unserfun (serializer/decoder (or fmt :json-plain)))))
-
+(defn serialization-format [fmt]
+  {:pre (some #{fmt} #{:json :json-verbose :msgpack :json-plain})}
+  (def serfun (serializer/encoder fmt))
+  (def unserfun (serializer/decoder fmt)))
 
 (defn bare-workflow []
   [[:bones/input :bones/output]])
@@ -72,5 +69,26 @@
   ([fn-sym topic]
    {:workflow (bare-workflow)
     :catalog (bare-catalog fn-sym topic)
+    :lifecycles (bare-lifecycles fn-sym)
+    :task-scheduler :onyx.task-scheduler/balanced}))
+
+(defn add-fn-task [catalog fn-sym]
+  (conj catalog
+        {:onyx/name fn-sym
+         :onyx/type :function
+         :onyx/batch-size 1
+         :onyx/fn fn-sym}))
+
+(defn single-function-workflow [fn-sym]
+  [[:bones/input fn-sym]
+   [fn-sym :bones/output]] )
+
+(defn single-function-job
+  "bare minimum plus one function"
+  ([fn-sym]
+   (single-function-job fn-sym (sym-to-topic fn-sym)))
+  ([fn-sym topic]
+   {:workflow (single-function-workflow fn-sym)
+    :catalog (add-fn-task (bare-catalog fn-sym topic) fn-sym)
     :lifecycles (bare-lifecycles fn-sym)
     :task-scheduler :onyx.task-scheduler/balanced}))

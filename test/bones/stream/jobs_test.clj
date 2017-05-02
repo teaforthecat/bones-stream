@@ -16,7 +16,11 @@
   (testing "bare bones"
     (let [wf (jobs/bare-workflow)]
       (is (= [[:bones/input :bones/output]]
-             wf)))))
+             wf))))
+  (testing "single function builds a connected pipeline"
+    (let [wf (jobs/single-function-workflow ::abc)]
+      (is (= [[:bones/input ::abc]
+              [::abc :bones/output]])))))
 
 (deftest catalog
   (testing "bare bones"
@@ -34,13 +38,6 @@
                 :kafka/offset-reset :latest
                 :kafka/wrap-with-metadata? true
                 }
-               ;; next:
-               ;; {:onyx/name :processor
-               ;;  :onyx/type :function
-               ;;  :onyx/max-peers 1
-               ;;  :onyx/batch-size 1
-               ;;  :onyx/fn ::abc}
-
                {:onyx/name :bones/output
                 :onyx/type :output
                 :onyx/fn :bones.stream.redis/redis-write
@@ -49,7 +46,15 @@
                 :bones.stream.jobs/channel "test"
                 :onyx/params [:bones.stream.jobs/channel]
                 :onyx/batch-size 1}]
-             c)))))
+             c))))
+  (testing "add-fn-task"
+    (let [c (jobs/bare-catalog ::abc "test")
+          [_ _ cl] (jobs/add-fn-task c ::abc)]
+      (is (= {:onyx/name ::abc
+              :onyx/type :function
+              :onyx/batch-size 1
+              :onyx/fn ::abc}
+             cl)))))
 
 (deftest lifecycles
   (testing "bare bones"

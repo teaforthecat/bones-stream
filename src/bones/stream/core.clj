@@ -15,7 +15,7 @@
 
 (defn build-system [sys onyx-job config]
   ;; sets the vars that are used by onyx plugins
-  (jobs/serialization-format (get-in config [:conf :stream :serialization-format]))
+  (jobs/serialization-format (get-in config [:conf :stream :serialization-format] :msgpack))
   (swap! sys #(-> %
                   (assoc :conf config)
                   (assoc :redis (component/using (redis/map->Redis {}) [:conf]))
