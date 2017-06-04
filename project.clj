@@ -10,7 +10,7 @@
                  ;; bones deps
                  [bones/conf "0.2.2"]
 
-                 [org.onyxplatform/onyx "0.10.0-beta8"]
+                 [org.onyxplatform/onyx "0.10.0-beta17"]
                  [com.taoensso/carmine "2.16.0"]
                  [org.onyxplatform/onyx-kafka "0.10.0.0-beta10"]
                  [cheshire "5.5.0"] ;; missing from ok deps
