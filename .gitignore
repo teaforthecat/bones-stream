@@ -3,3 +3,5 @@
 /.nrepl-port
 /onyx.log
 /tmp/
+/pom.xml
+/pom.xml.asc
