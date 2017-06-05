@@ -1,4 +1,4 @@
-(defproject bones/stream "0.0.2"
+(defproject bones/stream "0.0.3"
   :description "A spec-driven Onyx compiler"
   :url "https://github.com/teaforthecat/bones-stream"
   :license {:name "Eclipse Public License"
@@ -14,6 +14,7 @@
                  [org.onyxplatform/onyx "0.10.0-beta17"]
                  [org.onyxplatform/onyx-kafka "0.10.0.0-beta10"]
                  [com.taoensso/carmine "2.16.0"]
+                 [clj-kafka "0.3.4"];; onyx-kafka moved to franzy
                  [cheshire "5.5.0"] ;; missing from onyx-kafka deps
                  [aero "0.2.0"]     ;; missing from onyx-kafka deps
                  [manifold "0.1.6-alpha4"]
