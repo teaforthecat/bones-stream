@@ -5,6 +5,7 @@
              [redis :as redis]]
             [com.stuartsierra.component :as component]))
 
+
 ;; this is common to all components
 (defn- start-systems [system & components]
   (swap! system component/update-system components component/start))
@@ -20,6 +21,9 @@
   (swap! sys #(-> %
                   (assoc :conf config)
                   (assoc :redis (component/using (redis/map->Redis {}) [:conf]))
+                  ;; weird that peers require redis,
+                  ;; need to pass a redis connection to the onyx function though
+                  (assoc :peers (component/using (pipelines/map->Peers {}) [:conf :redis]))
                   (assoc :job (component/using (pipelines/map->KafkaRedis {:onyx-job onyx-job}) [:conf :redis])))))
 
 (defn assoc-job [sys job]
@@ -32,10 +36,10 @@
   (get-in sys [:job :onyx-job]))
 
 (defn start [sys]
-  (start-systems sys :job :redis :conf))
+  (start-systems sys :job :peers :redis :conf))
 
 (defn stop [sys]
-  (stop-systems sys :job :redis))
+  (stop-systems sys :job :peers :redis))
 
 
 (comment

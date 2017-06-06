@@ -6,8 +6,10 @@
              [protocols :as p]]
             [manifold.stream :as ms]))
 
+;; be sure to eval this function in the repl
 (defn my-inc [segment]
-  (update-in segment ["message" "args"] conj "up"))
+  ;; has keys :topic, :partition, :offset, :key, :message
+  (update-in segment [:message :args] conj "up"))
 
 (comment
   ;; create global state
@@ -36,10 +38,24 @@
 ;; connect stream to output
 (p/output (:job @system) outputter)
 
-;; input message to kafka
-(p/input (:job @system) {:key "123456"
-                         :message {:command "move"
-                                   :args ["left"]}})
+(ms/put! outputter "hi")
+(p/subscribe (get-in @system [:job :redis]) "bones.stream.core-test..my-inc" outputter)
+
+(time
+ (loop [n 0]
+   (if (< n 10000)
+     (do
+       ;; input message to kafka
+       (p/input (:job @system) {:key "123456"
+                                :value {:command "move"
+                                        :args ["left"]}})
+       (recur (inc n))))))
+
+(get-in @system [:peers])
+
+(p/input (:job @system) {:value :done})
+
+(get-in @system [:job :writer :task-map :kafka/topic])
 
 
 ;; see the output printed to the repl
