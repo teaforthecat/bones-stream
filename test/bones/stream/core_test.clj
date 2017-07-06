@@ -27,6 +27,10 @@
 
   ;; start onyx job, connect to redis, kafka
   (stream/start system)
+  ;; wait for onyx to start because it is configured to seek latest offset
+  ;; 5 seconds is probably too much, but it is safe
+  (Thread/sleep 5000)
+
 
   ;; a stream to connect output to a function
   (def outputter (ms/stream))
@@ -41,7 +45,7 @@
 
   (ms/put! outputter "subscription printer is working :)")
 
-  (time
+    (time
    (loop [n 0]
      (if (< n n-messages)
        (do
@@ -53,8 +57,8 @@
 
   ;; keep the current thread that prints going
   (when  @(future
-            ;; 10 seconds is more than generous for onyx to start processing
-            (Thread/sleep 10000)
+            ;; 5 seconds is probably too much, but it is safe
+            (Thread/sleep 5000)
             ;; stop everything
             (stream/stop system))
     (System/exit 0))
