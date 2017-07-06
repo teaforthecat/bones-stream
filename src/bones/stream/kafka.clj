@@ -30,34 +30,29 @@
       segment))
 
   (defn create-topic [ {:keys [:kafka/zookeeper
-                              :kafka/topic
-                              :zk/session-timeout
-                              :zk/is-secure?
-                              :kafka/partitions
-                              :kafka/replication-factor]
+                               :kafka/topic
+                               :zk/session-timeout
+                               :zk/is-secure?
+                               :kafka/partitions
+                               :kafka/replication-factor]
                         :or {:kafka/partitions 1
-                            :kafka/replication-factor 1
-                            :zk/is-secure? false}
+                             :kafka/replication-factor 1
+                             :zk/is-secure? false}
                         :as zopts}]
     (try
       (k-topics/create-topic!
-      (k-admin/make-zk-utils (cond-> {}
+       (k-admin/make-zk-utils (cond-> {}
                                 session-timeout
                                 (assoc :session-timeout session-timeout)
                                 zookeeper
                                 (assoc :servers zookeeper))
                               (boolean is-secure?))
-      topic
-      partitions
-      replication-factor)
+       topic
+       partitions
+       replication-factor)
       (catch kafka.common.TopicExistsException e
         ;; same as success, makes this idempotent
         nil)))
-
-  (comment
-    (create-topic "abc123" {:kafka/zookeeper "127.0.0.1:2181"} )
-
-    )
 
   (defn writer
     "create a kafka producer reusing conf from onyx job
@@ -65,7 +60,7 @@
     CONF is a map that gets merged with development defaults
     provide:
         :kafka/zookeeper host:port
-        :kafka/topic is optional can be in the message
+        :kafka/topic is optional as it can also be in the data sent to `send-sync!'
         :kafka/serializer-fn should match the :kafka/deserializer-fn"
     [conf]
     (let [kafka-args (select-keys conf [:kafka/topic
@@ -78,17 +73,10 @@
       (ok/write-messages {:onyx.core/task-map
                           (merge
                           {:kafka/zookeeper "127.0.0.1:2181"
-                            ;; :kafka/bootstrap.servers ["localhost:9092"]
-                            :kafka/serializer-fn :bones.stream.jobs/serfun
-                            ;; if this is on input and task, it should remove the need to use 'fix-key
-                            ;; :kafka/key-serializer-fn :bones.stream.jobs/serfun
-                            }
+                           :kafka/serializer-fn :bones.stream.jobs/serfun}
                           kafka-args)})))
 
-  ;; it is possible to send these key: topic partition key value
-  ;; but you probably only want :key and :value because topic and partition have been set on the producer instance
   (defn produce [prdcr topic serializer-fn msg]
-    ;; (send-sync! prdcr msg)
     (send-sync! prdcr {:topic topic
                        :key (some-> msg :key serializer-fn)
                        :value (some-> msg :value serializer-fn)}))

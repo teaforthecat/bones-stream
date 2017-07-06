@@ -10,16 +10,14 @@
   component/Lifecycle
   (start [cmp]
     (let [
-          peer-config (get-in cmp [:conf :stream :peer-config])
           ;; the FIRST parameter sent to ::redis/redis-write
           peer-config (assoc (get-in cmp [:conf :stream :peer-config])
                              :onyx.peer/fn-params {:bones/output [(:redis cmp)]})
           env-config (get-in cmp [:conf :stream :env-config])
+          start-env (get-in cmp [:conf :stream :start-env])
           n-peers 3 ;; or greater
 
-          ;; start-env is for dev only I guess
-          ;; dev-env (if (:zookeeper/server? env-config)) <- something like this???
-          dev-env (onyx.api/start-env env-config)
+          dev-env (if start-env (onyx.api/start-env env-config))
           peer-group (onyx.api/start-peer-group peer-config)
           peers (onyx.api/start-peers n-peers peer-group)
 
@@ -43,7 +41,7 @@
       (if job-id (onyx.api/kill-job peer-config job-id))
       ;; stop the peers
       (if peers (onyx.api/shutdown-peers peers))
-      ;; stop the peer manager(?)
+      ;; stop the peer manager
       (if peer-group (onyx.api/shutdown-peer-group peer-group))
       ;; stop the world
       (if dev-env (onyx.api/shutdown-env dev-env))
@@ -68,6 +66,7 @@
           ]
 
       (k/create-topic input-task)
+      ;; (Thread/sleep 100) ;; wait for topic to be created?????
 
       ;; use all the values set for the kafka reader for this kafka writer
       ;; (mainly topic)

@@ -8,7 +8,7 @@
                  [com.stuartsierra/component "0.3.2"]
 
                  ;; bones deps
-                 [bones/conf "0.2.2"]
+                 [bones/conf "0.2.3"]
 
                  [org.onyxplatform/lib-onyx "0.10.0.0"]
                  [org.onyxplatform/onyx "0.10.0-beta10"]
@@ -19,4 +19,11 @@
                  ;; [aero "0.2.0"]     ;; missing from onyx-kafka deps
                  [manifold "0.1.6-alpha4"]
                  [com.cognitect/transit-clj "0.8.297"]
-                 ])
+                 ]
+
+
+  :profiles {
+             ;; for testing a production configuration
+             :uberjar {:aot [bones.stream.core-test
+                             lib-onyx.media-driver]
+                       :source-paths ["src" "test"]}})

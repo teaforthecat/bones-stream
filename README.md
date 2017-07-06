@@ -11,6 +11,35 @@ API to make getting started as easy as possible. For a quick implementation
 example see [core-test](test/bones/stream/core_test.clj).
 
 
+## Deploy
+
+It is recommended to run Aeron in it's own process in production.
+Here is how to do that.
+
+Add namespaces to the lein profile that builds the jar. The namespaces must have
+`-main` methods and `(:gen-class)` in the definition.
+
+    :profiles {
+      :uberjar {:aot [xyz.stream
+                      lib-onyx.media-driver
+                      xyz.web
+                      xyz.other]}}
+
+Build the jar
+
+    lein uberjar
+    
+   
+Start processes with each of the desired entry points like this: 
+
+(note underscores)
+ 
+    java -cp target/xyz-standalone.jar xyz.stream
+    java -cp target/xyz-standalone.jar lib_onyx.media_driver
+    java -cp target/xyz-standalone.jar xyz.web
+    java -cp target/xyz-standalone.jar xyz.other
+
+
 ## Kafka Input
 
 Reuse configuration from Onyx Kafka Plugin to create a producer that will use
@@ -22,6 +51,23 @@ Reuse configuration from the :bones/output task to create a subscription to the
 same channel that the task is configured to publish to.
 
 
+## Tests
+
+    lein test
+    
+There is also a "test" in "production configuration". These commands
+    
+    lein uberjar
+    # start first
+    docker-compose up -d 
+    # start second
+    java -cp target/stream-0.0.3-standalone.jar lib-onyx.media_driver 
+    # start third
+    java -cp target/stream-0.0.3-standalone.jar bones.stream.core_test 
+
+You should see `:args [left up]` in the output because
+`bones.stream.core-test/my-inc` was executed between the `:bones/input` kafka
+task and the `:bones/output` redis task
 
 ## License
 
