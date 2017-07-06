@@ -17,7 +17,8 @@
           start-env (get-in cmp [:conf :stream :start-env])
           n-peers 3 ;; or greater
 
-          dev-env (if start-env (onyx.api/start-env env-config))
+          ;; dev-env (if start-env (onyx.api/start-env env-config))
+          dev-env (onyx.api/start-env env-config)
           peer-group (onyx.api/start-peer-group peer-config)
           peers (onyx.api/start-peers n-peers peer-group)
 
@@ -66,38 +67,30 @@
           ]
 
       (k/create-topic input-task)
-      ;; (Thread/sleep 100) ;; wait for topic to be created?????
+      (Thread/sleep 100) ;; wait for topic to be created?????
 
       ;; use all the values set for the kafka reader for this kafka writer
       ;; (mainly topic)
       (assoc cmp :writer (k/writer input-task)
-                 :job-id job-id
-                 ;; :dev-env dev-env
-                 ;; :peer-group peer-group
-                 ;; :peers peers
-                 )))
+                 :job-id job-id)))
   (stop [cmp]
     (let [peer-config (get-in cmp [:conf :stream :peer-config])
-          {:keys [producer
+          {:keys [writer
                   job-id
                   ]} cmp]
       ;; stop accepting messages
-      (if (:producer producer) (.close (:producer producer)))
+      (if (:producer writer) (.close (:producer writer)))
       ;; stop doing stuff on peers
       (if job-id (onyx.api/kill-job peer-config job-id))
-      (assoc cmp :producer nil
-                 :job-id nil
-                 )))
+      (assoc cmp :writer nil
+                 :job-id nil)))
   p/InputOutput
   ;; returns result from kafka :offset,etc.
   (input [cmp msg]
     ;; reuse info from the reader task we found in (start)
     (let [{:keys [:task-map :producer]} (:writer cmp)
           {:keys [:kafka/topic :kafka/serializer-fn]} task-map]
-      (k/produce producer topic (kw->fn serializer-fn) msg)
-      #_(k/produce producer
-                 topic
-                 msg)))
+      (k/produce producer topic (kw->fn serializer-fn) msg)))
   (output [cmp stream] ;; provide ms/stream
     (let [{:keys [:task-map :producer]} (:writer cmp)
           {:keys [:kafka/topic :kafka/serializer-fn]} task-map]
