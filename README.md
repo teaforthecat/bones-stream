@@ -55,7 +55,7 @@ same channel that the task is configured to publish to.
 
     lein test
     
-There is also a "test" in "production configuration". These commands
+There is also a "test" in "production configuration". Try it with these commands.
     
     lein uberjar
     # start first

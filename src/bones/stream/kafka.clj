@@ -77,6 +77,7 @@
                           kafka-args)})))
 
   (defn produce [prdcr topic serializer-fn msg]
-    (send-sync! prdcr {:topic topic
-                       :key (some-> msg :key serializer-fn)
-                       :value (some-> msg :value serializer-fn)}))
+    (send-sync! prdcr (merge {:topic topic}
+                             msg ;; may override topic or add partition
+                             {:key (some-> msg :key serializer-fn)
+                              :value (some-> msg :value serializer-fn)})))

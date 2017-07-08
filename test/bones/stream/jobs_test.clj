@@ -3,65 +3,76 @@
              [jobs :as jobs]
              [kafka :as kafka]]
             [clojure.test :refer [deftest is testing]]
+            [clojure.core.async :as a]
             [com.stuartsierra.component :as component]
             [onyx api
              [test-helper :refer [load-config with-test-env]]]
+            [onyx-local-rt.api :as api]
             [onyx.plugin.kafka :as ok]
             [bones.stream.protocols :as p]))
 
 (defn abc [segment]
   segment)
 
-(deftest workflow
-  (testing "bare bones"
-    (let [wf (jobs/bare-workflow)]
-      (is (= [[:bones/input :bones/output]]
-             wf))))
-  (testing "single function builds a connected pipeline"
-    (let [wf (jobs/single-function-workflow ::abc)]
-      (is (= [[:bones/input ::abc]
-              [::abc :bones/output]])))))
+(deftest task-builders
+  (testing "kafka-input-task with topic option in conf"
+    (let [{:keys [workflow catalog lifecycles]} ((jobs/input {:bones/input {:kafka/topic "abc"}}
+                                                             :kafka)
+                                                 {:workflow []})]
+      (is (= "abc" (:kafka/topic (first catalog))))))
+  (testing "kafka-input-task with topic option"
+    (let [{:keys [workflow catalog lifecycles]} ((jobs/input {} :kafka {:kafka/topic "abc"})
+                                                 {:workflow []})]
+      (is (= [[:bones/input]] workflow))
+      ;; this is good:
+      (is (= "abc" (:kafka/topic (first catalog))))))
+  (testing "kafka-input-task"
+    (let [{:keys [workflow catalog lifecycles]} ((jobs/input {} :kafka) {:workflow []})]
+      (is (= [[:bones/input]] workflow))
+      ;; this is bad: this will need to be in the docs
+      (is (= nil (:kafka/topic (first catalog))))))
+  (testing "redis-output-task with channel option in conf"
+    (let [{:keys [workflow catalog lifecycles]} ((jobs/output {:bones/output {:redis/channel "cba"}}
+                                                              :redis)
+                                                 {:workflow []})]
+      (is (= [[:bones/output]] workflow))
+      (is (= "cba" (:redis/channel (first catalog))))))
+  (testing "redis-output-task with channel option"
+    (let [{:keys [workflow catalog lifecycles]} ((jobs/output {} :redis {:redis/channel "cba"})
+                                                 {:workflow []})]
+      (is (= [[:bones/output]] workflow))
+      (is (= "cba" (:redis/channel (first catalog))))))
+  (testing "redis-output-task"
+    (let [{:keys [workflow catalog lifecycles]} ((jobs/output {} :redis)
+                                                 {:workflow []})]
+      ;; this is bad:
+      (is (= nil (:redis/channel (first catalog)))))))
 
-(deftest catalog
-  (testing "bare bones"
-    (let [c (jobs/bare-catalog ::abc "test")]
-      (is (= [{:onyx/name :bones/input
-                :onyx/type :input
-                :onyx/fn :bones.stream.kafka/fix-key
-                :onyx/medium :kafka
-                :onyx/plugin :onyx.plugin.kafka/read-messages
-                :onyx/max-peers 1
-                :onyx/batch-size 1
-                :kafka/zookeeper "localhost:2181"
-                :kafka/topic "test"
-                :kafka/deserializer-fn :bones.stream.jobs/unserfun
-                :kafka/offset-reset :latest
-                :kafka/wrap-with-metadata? true
-                }
-               {:onyx/name :bones/output
-                :onyx/type :output
-                :onyx/fn :bones.stream.redis/redis-write
-                :onyx/medium :function
-                :onyx/plugin :onyx.peer.function/function
-                :bones.stream.jobs/channel "test"
-                :onyx/params [:bones.stream.jobs/channel]
-                :onyx/batch-size 1}]
-             c))))
-  (testing "add-fn-task"
-    (let [c (jobs/bare-catalog ::abc "test")
-          [_ _ cl] (jobs/add-fn-task c ::abc)]
-      (is (= {:onyx/name ::abc
-              :onyx/type :function
-              :onyx/batch-size 1
-              :onyx/fn ::abc}
-             cl)))))
+(defn my-inc [segment]
+  (update-in segment [:n] inc))
 
-(deftest lifecycles
-  (testing "bare bones"
-    (let [lc (jobs/bare-lifecycles :abc)]
-      (is (= [{:lifecycle/task :bones/input
-               :lifecycle/calls :onyx.plugin.kafka/read-messages-calls}]
-             lc)))))
+(deftest run-job-test
+  (testing "single function job (41 becomes 42)"
+    (let [job (jobs/in-series {}
+                              (jobs/input :kafka)
+                              (jobs/function ::my-inc)
+                              ;; can't use redis here because it is a :onyx/type :function
+                              ;; and we would have to stub redis which is normally set by
+                              ;; :onyx.peer/fn-params in the peer config
+                              (jobs/output :dummy)
+                              )]
+      (is (= {:next-action :lifecycle/start-task?
+              :tasks {:bones/output {:inbox []
+                                     :outputs [{:n 42} {:n 85}]}
+                      :bones.stream.jobs-test/my-inc {:inbox []}
+                      :bones/input {:inbox []}}}
+             (-> (api/init job)
+                 (api/new-segment :bones/input {:n 41})
+                 (api/new-segment :bones/input {:n 84})
+                 (api/drain)
+                 (api/stop)
+                 (api/env-summary)))))))
+
 
 (comment  ;; WIP
 
