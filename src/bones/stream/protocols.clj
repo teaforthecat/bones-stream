@@ -4,6 +4,12 @@
   (input [_ msg])
   (output [_ stream]))
 
+(defprotocol Input
+  (input [_ msg]))
+
+(defprotocol Output
+  (output [_ stream]))
+
 (defprotocol Publish
   (publish [this user-id message]))
 

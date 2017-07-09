@@ -14,18 +14,18 @@
           peer-config (assoc (get-in cmp [:conf :stream :peer-config])
                              :onyx.peer/fn-params {:bones/output [(:redis cmp)]})
           env-config (get-in cmp [:conf :stream :env-config])
-          start-env (get-in cmp [:conf :stream :start-env])
           n-peers 3 ;; or greater
 
-          ;; dev-env (if start-env (onyx.api/start-env env-config))
-          dev-env (onyx.api/start-env env-config)
+          ;; windowing-env runs(or connects to) a bookeeper server to coordinate
+          ;; with other peer groups(processes)
+          windowing-env (onyx.api/start-env env-config)
           peer-group (onyx.api/start-peer-group peer-config)
           peers (onyx.api/start-peers n-peers peer-group)
 
           ]
       (assoc cmp :peer-group peer-group
                  :peers peers
-                 :dev-env dev-env
+                 :windowing-env windowing-env
                  )
       )
     )
@@ -33,7 +33,7 @@
     (let [peer-config (get-in cmp [:conf :stream :peer-config])
           {:keys [producer
                   job-id
-                  dev-env
+                  windowing-env
                   peer-group
                   peers]} cmp]
       ;; stop accepting messages
@@ -44,11 +44,11 @@
       (if peers (onyx.api/shutdown-peers peers))
       ;; stop the peer manager
       (if peer-group (onyx.api/shutdown-peer-group peer-group))
-      ;; stop the world
-      (if dev-env (onyx.api/shutdown-env dev-env))
+      ;; stop bookeeper
+      (if windowing-env (onyx.api/shutdown-env windowing-env))
       (assoc cmp :producer nil
              :job-id nil
-             :dev-env nil
+             :windowing-env nil
              :peer-group nil
              :peers nil))
     ))
@@ -102,3 +102,51 @@
 (defmethod clojure.core/print-method KafkaRedis
   [system ^java.io.Writer writer]
   (.write writer "#<bones.stream.pipelines/KafkaRedis>"))
+
+
+
+(defrecord KafkaInput [task-map]
+  component/Lifecycle
+  (start [cmp]
+    (let [writer (k/writer task-map)]
+      (assoc cmp
+             :producer (:producer writer)
+             :kafka/topic (:kafka/topic task-map)
+             :kafka/serializer (kw->fn (:kafka/serializer-fn task-map)))))
+  p/Input
+  (input [cmp msg]
+    (k/produce (:producer cmp)
+               (:kafka/topic cmp)
+               (:kafka/serializer cmp)
+               msg)))
+
+(defrecord RedisOutput [task-map redi]
+  component/Lifecycle
+  p/Output
+  (output [cmp stream]
+    (p/subscribe redi
+                 (:redis/channel task-map)
+                 stream)
+    stream))
+
+(defrecord Pipeline [input output]
+  component/Lifecycle
+  p/InputOutput
+  (input [cmp msg]
+    (p/input (:input cmp) msg))
+  (output [cmp stream]
+    (p/output (:output cmp) stream)
+    stream))
+
+
+(defmulti input (fn [service task-map] service))
+
+(defmethod input :kafka
+  [_ task-map]
+  (KafkaInput. task-map))
+
+(defmulti output (fn [service task-map] service))
+
+(defmethod output :redis
+  [_ task-map]
+  (RedisOutput. task-map (redis/Redis. (:redis/spec task-map))))

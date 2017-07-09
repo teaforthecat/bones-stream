@@ -2,7 +2,7 @@
   (:require [bones.stream
              [jobs :as jobs]
              [kafka :as kafka]]
-            [clojure.test :refer [deftest is testing]]
+            [clojure.test :refer [deftest is are testing]]
             [clojure.core.async :as a]
             [com.stuartsierra.component :as component]
             [onyx api
@@ -27,7 +27,8 @@
       ;; this is good:
       (is (= "abc" (:kafka/topic (first catalog))))))
   (testing "kafka-input-task"
-    (let [{:keys [workflow catalog lifecycles]} ((jobs/input {} :kafka) {:workflow []})]
+    (let [{:keys [workflow catalog lifecycles]} ((jobs/input {} :kafka)
+                                                 {:workflow []})]
       (is (= [[:bones/input]] workflow))
       ;; this is bad: this will need to be in the docs
       (is (= nil (:kafka/topic (first catalog))))))
@@ -48,19 +49,32 @@
       ;; this is bad:
       (is (= nil (:redis/channel (first catalog)))))))
 
+
+(deftest helpers
+  (testing "append-task"
+    (are [wf task result] (= result (jobs/append-task wf task))
+      nil       :a #_> [[:a]]
+      []        :a #_> [[:a]]
+      [[]]      :a #_> [[:a]]
+      [[:a]]    :b #_> [[:a :b]]
+      [[:a :b]] :c #_> [[:a :b]
+                        [:b :c]]
+      [[:a :b]
+       [:b :c]] :d #_> [[:a :b]
+                        [:b :c]
+                        [:c :d]])))
+
 (defn my-inc [segment]
   (update-in segment [:n] inc))
 
-(deftest run-job-test
+(deftest job-builders
   (testing "single function job (41 becomes 42)"
-    (let [job (jobs/in-series {}
+    (let [job (jobs/series-> {}
                               (jobs/input :kafka)
                               (jobs/function ::my-inc)
-                              ;; can't use redis here because it is a :onyx/type :function
-                              ;; and we would have to stub redis which is normally set by
-                              ;; :onyx.peer/fn-params in the peer config
-                              (jobs/output :dummy)
-                              )]
+                              (jobs/function ::my-other-inc)
+                              (jobs/output :dummy))]
+
       (is (= {:next-action :lifecycle/start-task?
               :tasks {:bones/output {:inbox []
                                      :outputs [{:n 42} {:n 85}]}
@@ -72,6 +86,12 @@
                  (api/drain)
                  (api/stop)
                  (api/env-summary)))))))
+
+
+
+
+
+
 
 
 (comment  ;; WIP

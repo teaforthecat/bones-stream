@@ -16,33 +16,44 @@
   (def serfun (serializer/encoder fmt))
   (def unserfun (serializer/decoder fmt)))
 
+;; Task functions
+;; these function merge sensible defaults with configuration data
+;; all values can be overridden by configured builders below
+
 (defn kafka-input-task [conf]
-  (merge {:onyx/name :bones/input
-          :onyx/type :input
-          :onyx/fn ::k/fix-key ;; preprocessor
-          :onyx/medium :kafka
-          :onyx/plugin :onyx.plugin.kafka/read-messages
-          :onyx/max-peers 1 ;; for read exactly once
-          :onyx/batch-size 1
-          :kafka/zookeeper "localhost:2181"
-          ;; :kafka/topic "default-topic"
-          :kafka/deserializer-fn ::unserfun
-          :kafka/offset-reset :latest
-          :kafka/wrap-with-metadata? true
-          }
-         conf))
+  (with-meta
+    (merge {:onyx/name :bones/input
+            :onyx/type :input
+            :onyx/fn ::k/fix-key ;; preprocessor
+            :onyx/medium :kafka
+            :onyx/plugin :onyx.plugin.kafka/read-messages
+            :onyx/max-peers 1 ;; for read exactly once
+            :onyx/batch-size 1
+            :kafka/zookeeper "localhost:2181"
+            ;; :kafka/topic "default-topic"
+            :kafka/deserializer-fn ::unserfun
+            :kafka/offset-reset :latest
+            :kafka/wrap-with-metadata? true
+            }
+           conf)
+   {:bones/service :kafka} ;; used by the pipeline to build input function
+    ))
+
 
 (defn redis-output-task [conf]
-  (merge {:onyx/name :bones/output
-          :onyx/type :output
-          :onyx/fn ::redis/redis-write
-          :onyx/medium :function
-          :onyx/plugin :onyx.peer.function/function
-          ;; the SECOND param sent to ::redis-write
-          ;; :redis/channel "default-topic"
-          :onyx/params [:redis/channel]
-          :onyx/batch-size 1}
-         conf))
+  (with-meta
+    (merge {:onyx/name :bones/output
+            :onyx/type :output
+            :onyx/fn ::redis/redis-write
+            :onyx/medium :function
+            :onyx/plugin :onyx.peer.function/function
+            ;; the SECOND param sent to ::redis-write
+            ;; :redis/channel "default-topic"
+            ;; :redis/spec {:host \"127.0.0.1\" :port 6379}
+            :onyx/params [:redis/spec :redis/channel]
+            :onyx/batch-size 1}
+           conf)
+    {:bones/service :redis}))
 
 (defn dummy-output-task [conf]
   (merge conf {:onyx/name :bones/output
@@ -61,6 +72,8 @@
   {:lifecycle/task :bones/input
    :lifecycle/calls :onyx.plugin.kafka/read-messages-calls})
 
+;; Helper functions
+
 (defn sym-to-topic
   "generate a kafka-acceptable topic name
   (sym-to-topic :a.b/c) => \"a.b..c\" "
@@ -69,15 +82,23 @@
       (clojure.string/replace "/" "..") ;; / is illegal in kafka topic name
       (subs 1))) ;; remove leading colon
 
-(defn intersperse-task [catalog task]
-  (let [remaining-catalog (vec (butlast catalog))
-        [last1 last2] (last catalog)
-        second-to-last (remove nil? [last1 task])
-        new-last       (remove nil? [(if last2 task) last2])]
+(defn append-task [workflow task]
+  (let [remaining-workflow (vec (butlast workflow))
+        [last1 last2] (last workflow)
+        second-to-last (remove nil? [last1 (or last2 task)])
+        new-last       (remove nil? [last2 (if last2 task)])]
     ;; pity we need to turn all back into vectors
-    (mapv vec (distinct (remove empty? (conj remaining-catalog
+    (mapv vec (distinct (remove empty? (conj remaining-workflow
                                              second-to-last
                                              new-last))))))
+
+;; Task Builders
+;; these functions accept a configuration map and
+;; return a function that will use the map to add a task to a job
+;; the returned function is considered a "configured builder"
+;; most will support two ways to add configuration, the first arg, and the third arg
+;; having both allows for expressive freedom, which is nice depending on whether
+;; there is a lot of configuration data or just a little
 
 (defmulti input (fn [conf x & _] x))
 
@@ -89,7 +110,6 @@
      (let [task-conf (merge opts (:bones/input conf))]
        (-> job
            (update :workflow conj [:bones/input])
-           ;;FIXME nil to keep signature of input-task for now, topic should be :kafka/topic in the conf map
            (update :catalog conj (kafka-input-task task-conf))
            (update :lifecycles conj kafka-lifecycle)
            ;; this could happen anywhere, not sure if it should be able to be overridden
@@ -105,7 +125,7 @@
    (fn [job]
      (let [task-conf (merge opts (:bones/output conf))]
        (-> job
-           (update :workflow intersperse-task :bones/output)
+           (update :workflow append-task :bones/output)
            (update :catalog conj (redis-output-task task-conf)))))))
 
 (defmethod output :dummy
@@ -115,44 +135,44 @@
    (fn [job]
      (let [task-conf (merge opts (:bones/output conf))]
        (-> job
-           (update :workflow intersperse-task :bones/output)
+           (update :workflow append-task :bones/output)
            (update :catalog conj (dummy-output-task task-conf)))))))
 
 (defn function
-  "arg ns-fn should be a namespaced symbol of a function that takes a segment,
+  "arg ns-fn should be a namespaced keyword of a function that takes a segment,
    or anything in which case :onyx/fn will need to be the \"ns-fn\""
-  ([ns-fn]
-   (function ns-fn {}))
-  ([ns-fn opts]
+  ([conf ns-fn]
+   (function conf ns-fn {}))
+  ([conf ns-fn opts]
    (fn [job]
      (let [task-conf (-> opts
                          (update :onyx/name #(or % ns-fn))
-                         (update :onyx/fn   #(or % ns-fn)))
-           ]
+                         (update :onyx/fn   #(or % ns-fn)))]
        (-> job
-           (update :workflow intersperse-task (:onyx/name task-conf))
+           (update :workflow append-task (:onyx/name task-conf))
            (update :catalog conj (fn-task task-conf))
            ;; no lifecycles here
            )))))
 
-(defmacro in-series
-  " Rearranges the forms so you can read the order correctly.
-    This is a shim or repercussion of how `intersperse-task' works. This way we can have
-  anything that mutates a job between the input and output and since the job will require
-  an input and an output, we can get way with this I think.
-  (in-series conf
-           (b/input :kafka)
-           (b/function ::my-inc)
-           (b/function ::my-other-inc)
-           (b/output :redis))"
-  [conf input & tasks]
-  (assert (< 0 (count tasks)) "at minimum an input and an output is required")
-  (let [output (last tasks)
-        middle (butlast tasks)]
-    `(let [input-fn# (-> ~conf ~input)
-           output-fn# (-> ~conf ~output)
-           middle-fn# (comp ~@(reverse middle))]
-       (-> {:workflow []}
-           input-fn#
-           output-fn#
-           middle-fn#))))
+;; Job Builders (only one so far)
+;; This macro is a helper to build a job. it is not required.
+;; It provides a double threading technique where the first pass
+;; puts together "configured builders" and the second pass
+;; threads a job through them to complete a job build
+
+
+(defmacro series->
+  " Builds a simple job where the segment will be sent through the tasks in a simple series.
+
+  - thread conf through the builders
+  - then thread the job through the returned fn
+  - works like the -> macro splice in the `conf' like the -> macro, but also
+  call the returned functions with a job. This may be a horrible idea, but it
+  looks cool right now :) "
+  [conf & tasks]
+  (assert (< 2 (count tasks)) "at minimum an input and an output is required")
+  (let [cfn (fn [x] `(~(first x) ~conf ~@(rest x)))
+        forms (map cfn tasks)]
+    `((comp ~@(reverse forms)) {:workflow []
+                                :catalog []
+                                :lifecycles []})))
