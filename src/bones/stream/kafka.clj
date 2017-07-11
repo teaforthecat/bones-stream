@@ -21,7 +21,6 @@
             [org.apache.kafka.common.errors.TopicExistsException]))
 
   (defn fix-key [segment]
-    (debug "fix-key: " segment)
     ;; :kafka/wrap-with-metadata? must be set to true to get the key
     (if (:key segment)
       ;; key is not de-serialized by onyx-kafka; must be an oversight
@@ -77,6 +76,7 @@
                           kafka-args)})))
 
   (defn produce [prdcr topic serializer-fn msg]
-    (send-sync! prdcr {:topic topic
-                       :key (some-> msg :key serializer-fn)
-                       :value (some-> msg :value serializer-fn)}))
+    (send-sync! prdcr (merge {:topic topic}
+                             msg ;; may override topic or add partition
+                             {:key (some-> msg :key serializer-fn)
+                              :value (some-> msg :value serializer-fn)})))

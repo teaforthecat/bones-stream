@@ -10,6 +10,9 @@
                  ;; bones deps
                  [bones/conf "0.2.3"]
 
+                 ;; dev profile only?
+                 [org.onyxplatform/onyx-local-rt "0.10.0.0-beta8"]
+
                  [org.onyxplatform/lib-onyx "0.10.0.0"]
                  [org.onyxplatform/onyx "0.10.0-beta10"]
                  [org.onyxplatform/onyx-kafka "0.10.0.0-beta10"]

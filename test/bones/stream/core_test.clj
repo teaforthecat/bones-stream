@@ -22,7 +22,10 @@
   (stream/build-system system
                        ;; single-function-job:
                        ;; kafka -> my-inc -> redis
-                       (jobs/single-function-job ::my-inc)
+                       (jobs/series-> {}
+                                         (jobs/input :kafka {:kafka/topic "bones.stream.core-test..my-inc" })
+                                         (jobs/function ::my-inc)
+                                         (jobs/output :redis {:redis/channel "bones.stream.core-test..my-inc"}))
                        (conf/map->Conf {:conf-files ["resources/dev-config.edn"]}))
 
   ;; start onyx job, connect to redis, kafka
@@ -39,13 +42,12 @@
   ;; prints to stdout
   (ms/consume println outputter)
 
-  ;; subscribe to redis pub/sub channel
-  ;; connect stream to output
+  ;; subscribe to redis pub/sub channel and send it to a stream
   (p/output (:job @system) outputter)
 
   (ms/put! outputter "subscription printer is working :)")
 
-    (time
+  (time
    (loop [n 0]
      (if (< n n-messages)
        (do
@@ -55,10 +57,11 @@
                                           :args ["left"]}})
          (recur (inc n))))))
 
-  ;; keep the current thread that prints going
   (when  @(future
             ;; 5 seconds is probably too much, but it is safe
             (Thread/sleep 5000)
+            (println (p/fetch-all (get-in @system [:job :redis])
+                                  (get-in @system [:job :writer :task-map :kafka/topic])))
             ;; stop everything
             (stream/stop system))
     (System/exit 0))

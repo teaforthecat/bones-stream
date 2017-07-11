@@ -20,9 +20,13 @@
   (jobs/serialization-format (get-in config [:stream :serialization-format] :msgpack))
   (swap! sys #(-> %
                   (assoc :conf config)
+                  (assoc :pipeline (pipelines/pipeline onyx-job)) ;; for the "client" of the stream
                   (assoc :redis (component/using (redis/map->Redis {}) [:conf]))
-                  ;; weird that peers require redis,
-                  ;; need to pass a redis connection to the onyx function though
+                  ;; weird that peers require redis but we need to
+                  ;; pass a redis connection to the onyx function though :onyx.peer/fn-params
+                  ;; TODO: need to have two entry points:
+                  ;; - input/output
+                  ;; - start-peers and submit job
                   (assoc :peers (component/using (pipelines/map->Peers {}) [:conf :redis]))
                   (assoc :job (component/using (pipelines/map->KafkaRedis {:onyx-job onyx-job}) [:conf :redis])))))
 

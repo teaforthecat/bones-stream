@@ -1,7 +1,10 @@
 (ns bones.stream.protocols)
 
-(defprotocol InputOutput
-  (input [_ msg])
+
+(defprotocol Input
+  (input [_ msg]))
+
+(defprotocol Output
   (output [_ stream]))
 
 (defprotocol Publish

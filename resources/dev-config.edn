@@ -27,6 +27,5 @@
    ;;starts aeron messanger, which runs separately normally
    ;; :onyx.messaging.aeron/embedded-driver? #profile{:test true :default false}}
    :onyx.messaging.aeron/embedded-driver? false}
-  :start-env true ;; for bookkeeper
   }
  }
