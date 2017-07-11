@@ -1,8 +1,5 @@
 (ns bones.stream.protocols)
 
-(defprotocol InputOutput
-  (input [_ msg])
-  (output [_ stream]))
 
 (defprotocol Input
   (input [_ msg]))

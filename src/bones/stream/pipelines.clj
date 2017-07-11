@@ -11,8 +11,9 @@
   (start [cmp]
     (let [
           ;; the FIRST parameter sent to ::redis/redis-write
-          peer-config (assoc (get-in cmp [:conf :stream :peer-config])
-                             :onyx.peer/fn-params {:bones/output [(:redis cmp)]})
+          ;; peer-config (assoc (get-in cmp [:conf :stream :peer-config])
+          ;;                    :onyx.peer/fn-params {:bones/output [(:redis cmp)]})
+          peer-config (get-in cmp [:conf :stream :peer-config])
           env-config (get-in cmp [:conf :stream :env-config])
           n-peers 3 ;; or greater
 
@@ -84,13 +85,14 @@
       (if job-id (onyx.api/kill-job peer-config job-id))
       (assoc cmp :writer nil
                  :job-id nil)))
-  p/InputOutput
+  p/Input
   ;; returns result from kafka :offset,etc.
   (input [cmp msg]
     ;; reuse info from the reader task we found in (start)
     (let [{:keys [:task-map :producer]} (:writer cmp)
           {:keys [:kafka/topic :kafka/serializer-fn]} task-map]
       (k/produce producer topic (kw->fn serializer-fn) msg)))
+  p/Output
   (output [cmp stream] ;; provide ms/stream
     (let [{:keys [:task-map :producer]} (:writer cmp)
           {:keys [:kafka/topic :kafka/serializer-fn]} task-map]
@@ -112,7 +114,8 @@
       (assoc cmp
              :producer (:producer writer)
              :kafka/topic (:kafka/topic task-map)
-             :kafka/serializer (kw->fn (:kafka/serializer-fn task-map)))))
+             ;; work around. can't set this on the input task, onyx will complain :(
+             :kafka/serializer (kw->fn (:kafka/serializer-fn (meta task-map))))))
   p/Input
   (input [cmp msg]
     (k/produce (:producer cmp)
@@ -122,8 +125,13 @@
 
 (defrecord RedisOutput [task-map redi]
   component/Lifecycle
+  (start [cmp] cmp)
+  (stop [cmp]
+    (.stop redi)
+    cmp)
   p/Output
   (output [cmp stream]
+    ;; redi is a instance of redis/Redis
     (p/subscribe redi
                  (:redis/channel task-map)
                  stream)
@@ -131,22 +139,42 @@
 
 (defrecord Pipeline [input output]
   component/Lifecycle
-  p/InputOutput
+  (start [cmp]
+    ;; workaround component's start-system because we don't know what the
+    ;; keys(service) will be in the system map (because input/output defmethods
+    ;; can be extended)
+    (assoc cmp
+           :input (component/start input)
+           :output (component/start output)))
+  (stop [cmp] cmp)
+  p/Input
   (input [cmp msg]
     (p/input (:input cmp) msg))
+  p/Output
   (output [cmp stream]
     (p/output (:output cmp) stream)
     stream))
-
 
 (defmulti input (fn [service task-map] service))
 
 (defmethod input :kafka
   [_ task-map]
-  (KafkaInput. task-map))
+  (map->KafkaInput {:task-map task-map}))
 
 (defmulti output (fn [service task-map] service))
 
 (defmethod output :redis
   [_ task-map]
-  (RedisOutput. task-map (redis/Redis. (:redis/spec task-map))))
+  (map->RedisOutput {:task-map task-map
+                     :redi (redis/map->Redis {:spec (:redis/spec task-map)})}))
+
+
+(defn pipeline [job]
+  (let [findr (fn [x ys] (first (filter #(= x (:onyx/name %)) ys)))
+        input-task-map  (findr :bones/input  (:catalog job))
+        output-task-map (findr :bones/output (:catalog job))
+        input-service  (get (meta input-task-map)  :bones/service)
+        output-service (get (meta output-task-map) :bones/service)]
+    ;; this component will start the input and outputs along with it
+    (map->Pipeline {:input (input  input-service  input-task-map)
+                    :output (output output-service output-task-map)})))

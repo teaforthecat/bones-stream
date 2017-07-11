@@ -1,21 +1,19 @@
 (ns bones.stream.redis-test
-  (:require [bones.conf :as conf]
-            [bones.stream.redis :as redis]
+  (:require [bones.stream.redis :as redis]
             [clojure.test :refer [deftest testing is use-fixtures run-tests]]
             [manifold.stream :as ms]
             [com.stuartsierra.component :as component]
-            [bones.stream.kafka :as kafka]
             [bones.stream.protocols :as p]))
 
 
-;; the default spec could be left out but this provides an example
+;; the default spec could be left here out but this provides an example
 (def redi (redis/map->Redis {:spec {:host "127.0.0.1" :port 6379}}))
 
 (deftest pubsub
   (testing "pubsub serialization"
     (let [stream (ms/stream)
-          _ (p/subscribe redi "123" stream)
-          _ (p/publish redi "123" {:abc 123})
+          _ (p/subscribe redi "test123" stream)
+          _ (p/publish redi "test123" {:abc 123})
           result (ms/take! stream)]
       (is (= {:abc 123} @result)))))
 

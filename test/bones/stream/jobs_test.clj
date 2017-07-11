@@ -15,6 +15,12 @@
   segment)
 
 (deftest task-builders
+  (testing "adds metadata about which service a task uses"
+    (are [result service] (-> (meta result)
+                              (get :bones/service)
+                              (= service))
+      (jobs/kafka-input-task {}) :kafka
+      (jobs/redis-output-task {}) :redis))
   (testing "kafka-input-task with topic option in conf"
     (let [{:keys [workflow catalog lifecycles]} ((jobs/input {:bones/input {:kafka/topic "abc"}}
                                                              :kafka)
@@ -72,7 +78,6 @@
     (let [job (jobs/series-> {}
                               (jobs/input :kafka)
                               (jobs/function ::my-inc)
-                              (jobs/function ::my-other-inc)
                               (jobs/output :dummy))]
 
       (is (= {:next-action :lifecycle/start-task?
@@ -86,46 +91,3 @@
                  (api/drain)
                  (api/stop)
                  (api/env-summary)))))))
-
-
-
-
-
-
-
-
-(comment  ;; WIP
-
-  (deftest job
-    (let [redis (component/start (bones.stream.redis/map->Redis {}))
-          config (load-config "dev-config.edn")
-          topic "test"
-
-          env-config  (:env-config config)
-          peer-config (assoc (:peer-config config)
-                             :onyx.peer/fn-params {:bones/output [redis]})
-
-
-          command-ns ::abc
-          job {:workflow (jobs/bare-workflow command-ns)
-               :catalog (jobs/bare-catalog command-ns topic)
-               :lifecycles (jobs/bare-lifecycles command-ns)
-               :task-scheduler :onyx.task-scheduler/balanced}
-          bones-job (component/start (jobs/map->Job {:onyx-job job
-                                                      :conf conf}))]
-
-      (with-test-env [test-env [3 env-config peer-config]]
-        (onyx.api/submit-job peer-config job)
-        (bones.stream/submit bones-job)
-        ;; time needed to start the job and start the consumer
-        (Thread/sleep 8000)
-        (p/input bones-job {:topic "test"
-                            :key "125"
-                            :message {:hi "yo" :ya "watsup"}})
-
-        ;; way more time than needed to allow the segment to flow
-        (Thread/sleep 1000)
-        ;; value is the same as message
-        (is (= {:key "125", :value {"hi" "yo", "ya" "watsup"}}
-               (first @(.fetch-all (bones.stream.redis/map->Redis {}) "test"))))
-        ))))

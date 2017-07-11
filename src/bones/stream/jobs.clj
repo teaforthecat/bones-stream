@@ -36,7 +36,10 @@
             :kafka/wrap-with-metadata? true
             }
            conf)
-   {:bones/service :kafka} ;; used by the pipeline to build input function
+    ;; meta is used by the pipeline to build an input function
+    {:bones/service :kafka
+     ;; work around. can't set this on the input task, onyx will complain :(
+     :kafka/serializer-fn (or (:kafka/serializer-fn conf) ::serfun)}
     ))
 
 
@@ -170,7 +173,7 @@
   call the returned functions with a job. This may be a horrible idea, but it
   looks cool right now :) "
   [conf & tasks]
-  (assert (< 2 (count tasks)) "at minimum an input and an output is required")
+  (assert (<= 2 (count tasks)) "at minimum an input and an output is required")
   (let [cfn (fn [x] `(~(first x) ~conf ~@(rest x)))
         forms (map cfn tasks)]
     `((comp ~@(reverse forms)) {:workflow []

@@ -22,7 +22,7 @@
   (stream/build-system system
                        ;; single-function-job:
                        ;; kafka -> my-inc -> redis
-                       (jobs/in-series {}
+                       (jobs/series-> {}
                                          (jobs/input :kafka {:kafka/topic "bones.stream.core-test..my-inc" })
                                          (jobs/function ::my-inc)
                                          (jobs/output :redis {:redis/channel "bones.stream.core-test..my-inc"}))
