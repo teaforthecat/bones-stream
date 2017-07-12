@@ -2,6 +2,7 @@
   (:require [bones.stream
              [jobs :as jobs]
              [pipelines :as pipelines]
+             [peers :as peers]
              [redis :as redis]]
             [com.stuartsierra.component :as component]))
 
@@ -20,30 +21,13 @@
   (jobs/serialization-format (get-in config [:stream :serialization-format] :msgpack))
   (swap! sys #(-> %
                   (assoc :conf config)
-                  (assoc :pipeline (pipelines/pipeline onyx-job)) ;; for the "client" of the stream
-                  (assoc :redis (component/using (redis/map->Redis {}) [:conf]))
-                  ;; weird that peers require redis but we need to
-                  ;; pass a redis connection to the onyx function though :onyx.peer/fn-params
-                  ;; TODO: need to have two entry points:
-                  ;; - input/output
-                  ;; - start-peers and submit job
-                  (assoc :peers (component/using (pipelines/map->Peers {}) [:conf :redis]))
-                  (assoc :job (component/using (pipelines/map->KafkaRedis {:onyx-job onyx-job}) [:conf :redis])))))
-
-(defn assoc-job [sys job]
-  (swap! sys assoc-in [:job :onyx-job] job))
-
-(defn update-job [sys update-fn]
-  (swap! sys update-in [:job :onyx-job] update-fn))
-
-(defn get-job [sys]
-  (get-in sys [:job :onyx-job]))
+                  (assoc :peers (component/using (peers/map->Peers {}) [:conf])))))
 
 (defn start [sys]
-  (start-systems sys :job :peers :redis :conf))
+  (start-systems sys :peers :conf))
 
 (defn stop [sys]
-  (stop-systems sys :job :peers :redis))
+  (stop-systems sys :peers))
 
 
 (comment
