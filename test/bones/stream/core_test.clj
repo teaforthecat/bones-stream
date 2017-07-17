@@ -7,7 +7,8 @@
              [peer-group :as peer-group]
              [jobs :as jobs]
              [protocols :as p]]
-            [manifold.stream :as ms]))
+            [manifold.stream :as ms]
+            [com.stuartsierra.component :as component]))
 
 (defn my-inc [segment]
   ;; has keys :topic, :partition, :offset, :key, :message
@@ -24,18 +25,22 @@
   (let [job (jobs/series-> {}
                            (jobs/input :kafka {:kafka/topic "bones.stream.core-test..my-inc" })
                            (jobs/function ::my-inc)
-                           (jobs/output :redis {:redis/channel "bones.stream.core-test..my-inc"}))]
+                           (jobs/output :redis {:redis/channel "bones.stream.core-test..my-inc"}))
+        pipeline (stream/pipeline job)]
+
     (stream/build-system system
                          (conf/map->Conf {:conf-files ["resources/dev-config.edn"]}))
 
     ;; start onyx peers, connect to redis, kafka
     (stream/start system)
-    ;; submit-job to start pulling segments from kafka
-    (stream/submit-job system job)
-
     ;; wait for onyx to start because it is configured to seek latest offset
     ;; 5 seconds is probably too much, but it is safe
+    ;; peers need to be running in order for submit-job to succeed
     (Thread/sleep 5000)
+
+
+    ;; submit-job to start pulling segments from kafka
+    (stream/submit-job system job)
 
 
     ;; a stream to connect output to a function
@@ -46,7 +51,7 @@
     (ms/consume println outputter)
 
     ;; subscribe to redis pub/sub channel and send it to a stream
-    (p/output (:job @system) outputter)
+    (p/output pipeline outputter)
 
     (ms/put! outputter "subscription printer is working :)")
 
@@ -55,21 +60,21 @@
        (if (< n n-messages)
          (do
            ;; input message to kafka
-           (p/input (:job @system) {:key (str "123" n)
-                                    :value {:command "move"
-                                            :args ["left"]}})
+           (p/input pipeline {:key (str "123" n)
+                              :value {:command "move"
+                                      :args ["left"]}})
            (recur (inc n))))))
 
     (when  @(future
               ;; 5 seconds is probably too much, but it is safe
               (Thread/sleep 5000)
-              (println (p/fetch-all (get-in @system [:job :redis])
-                                    (get-in @system [:job :writer :task-map :kafka/topic])))
+              ;; close redis subscriber and kafka publisher
+              (component/stop pipeline)
               ;; stop processing
               (stream/kill-jobs system)
               ;; stop everything
               (stream/stop system))
-      (System/exit 0)))
+      (println "main-usage completed")))
 
 
 

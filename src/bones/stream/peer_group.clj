@@ -25,9 +25,6 @@
   component/Lifecycle
   (start [cmp]
     (let [
-          ;; the FIRST parameter sent to ::redis/redis-write
-          ;; peer-config (assoc (get-in cmp [:conf :stream :peer-config])
-          ;;                    :onyx.peer/fn-params {:bones/output [(:redis cmp)]})
           peer-config (get-in cmp [:conf :stream :peer-config])
           env-config (get-in cmp [:conf :stream :env-config])
           n-peers 3 ;; or greater

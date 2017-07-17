@@ -32,8 +32,12 @@
 (defn submit-job [sys job]
   (peer-group/submit-job (:peer-group @sys) job))
 
+(defn pipeline [job]
+  (component/start (pipelines/pipeline job)))
+
 (defn kill-jobs [sys]
   (peer-group/kill-jobs (:peer-group @sys)))
+
 (comment
 
   (def system (atom {}))

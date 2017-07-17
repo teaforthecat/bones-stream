@@ -26,6 +26,6 @@
    :onyx.messaging/peer-port 40200
    ;;starts aeron messanger, which runs separately normally
    ;; :onyx.messaging.aeron/embedded-driver? #profile{:test true :default false}}
-   :onyx.messaging.aeron/embedded-driver? false}
+   :onyx.messaging.aeron/embedded-driver? true}
   }
  }

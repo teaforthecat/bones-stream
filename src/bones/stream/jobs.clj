@@ -52,7 +52,7 @@
             :onyx/plugin :onyx.peer.function/function
             ;; the SECOND param sent to ::redis-write
             ;; :redis/channel "default-topic"
-            ;; :redis/spec {:host \"127.0.0.1\" :port 6379}
+            :redis/spec {:host "127.0.0.1" :port 6379}
             :onyx/params [:redis/spec :redis/channel]
             :onyx/batch-size 1}
            conf)
@@ -143,7 +143,7 @@
 
 (defn function
   "arg ns-fn should be a namespaced keyword of a function that takes a segment,
-   or anything in which case :onyx/fn will need to be the \"ns-fn\""
+   or anything; in which case :onyx/fn will need to be the \"ns-fn\""
   ([conf ns-fn]
    (function conf ns-fn {}))
   ([conf ns-fn opts]

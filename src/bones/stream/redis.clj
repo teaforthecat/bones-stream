@@ -85,9 +85,10 @@
   [system ^java.io.Writer writer]
   (.write writer "#<bones.stream.redis/Redis>"))
 
-(defn redis-write [redi channel message]
+(defn redis-write [spec channel message]
   (debug "redis-write: " channel " " message )
-  (let [k (:key message)
+  (let [redi (->Redis spec)
+        k (:key message)
         v (:message message)]
     (p/write redi channel k v)
     (p/publish redi channel message)))
