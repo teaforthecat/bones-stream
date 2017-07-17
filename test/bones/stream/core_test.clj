@@ -1,7 +1,7 @@
 (ns bones.stream.core-test
   (:gen-class)
-  (:require [bones.conf :as conf]
-            [clojure.test :refer [deftest testing is are use-fixtures run-tests]]
+  (:require [clojure.test :refer [deftest testing is are use-fixtures run-tests]]
+            [bones.conf :as conf]
             [bones.stream
              [core :as stream]
              [peer-group :as peer-group]
