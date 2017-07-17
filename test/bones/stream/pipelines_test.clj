@@ -18,12 +18,13 @@
         [:input :task-map :onyx/medium] :kafka
         [:output :task-map :onyx/params] [:redis/spec :redis/channel])))
 
+  ;; depends on running kafka, provided by docker-compose
   (testing "starts the input and outputs"
     (let  [topic "test123"
            job (jobs/series-> {}
                               (jobs/input :kafka)
                               (jobs/output :redis {:redis/channel topic}))
-           ;; this will need to go somewhere...
+           ;; this gets called in core/build-system
            _ (jobs/serialization-format :msgpack)
            pipe (component/start (pipelines/pipeline job))
            stream (ms/stream)]

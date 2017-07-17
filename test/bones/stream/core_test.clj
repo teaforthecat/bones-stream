@@ -1,6 +1,7 @@
 (ns bones.stream.core-test
   (:gen-class)
   (:require [bones.conf :as conf]
+            [clojure.test :refer [deftest testing is are use-fixtures run-tests]]
             [bones.stream
              [core :as stream]
              [peer-group :as peer-group]
@@ -18,7 +19,8 @@
 (def system (atom {}))
 
 
-(defn -main []
+(deftest main-usage
+
   (let [job (jobs/series-> {}
                            (jobs/input :kafka {:kafka/topic "bones.stream.core-test..my-inc" })
                            (jobs/function ::my-inc)
