@@ -3,6 +3,7 @@
   (:require [bones.conf :as conf]
             [bones.stream
              [core :as stream]
+             [peer-group :as peer-group]
              [jobs :as jobs]
              [protocols :as p]]
             [manifold.stream :as ms]))
@@ -18,53 +19,55 @@
 
 
 (defn -main []
-  ;; glue components together
-  (stream/build-system system
-                       ;; single-function-job:
-                       ;; kafka -> my-inc -> redis
-                       (jobs/series-> {}
-                                         (jobs/input :kafka {:kafka/topic "bones.stream.core-test..my-inc" })
-                                         (jobs/function ::my-inc)
-                                         (jobs/output :redis {:redis/channel "bones.stream.core-test..my-inc"}))
-                       (conf/map->Conf {:conf-files ["resources/dev-config.edn"]}))
+  (let [job (jobs/series-> {}
+                           (jobs/input :kafka {:kafka/topic "bones.stream.core-test..my-inc" })
+                           (jobs/function ::my-inc)
+                           (jobs/output :redis {:redis/channel "bones.stream.core-test..my-inc"}))]
+    (stream/build-system system
+                         (conf/map->Conf {:conf-files ["resources/dev-config.edn"]}))
 
-  ;; start onyx job, connect to redis, kafka
-  (stream/start system)
-  ;; wait for onyx to start because it is configured to seek latest offset
-  ;; 5 seconds is probably too much, but it is safe
-  (Thread/sleep 5000)
+    ;; start onyx peers, connect to redis, kafka
+    (stream/start system)
+    ;; submit-job to start pulling segments from kafka
+    (stream/submit-job system job)
+
+    ;; wait for onyx to start because it is configured to seek latest offset
+    ;; 5 seconds is probably too much, but it is safe
+    (Thread/sleep 5000)
 
 
-  ;; a stream to connect output to a function
-  (def outputter (ms/stream))
+    ;; a stream to connect output to a function
+    (def outputter (ms/stream))
 
-  ;; connect stream to a function
-  ;; prints to stdout
-  (ms/consume println outputter)
+    ;; connect stream to a function
+    ;; prints to stdout
+    (ms/consume println outputter)
 
-  ;; subscribe to redis pub/sub channel and send it to a stream
-  (p/output (:job @system) outputter)
+    ;; subscribe to redis pub/sub channel and send it to a stream
+    (p/output (:job @system) outputter)
 
-  (ms/put! outputter "subscription printer is working :)")
+    (ms/put! outputter "subscription printer is working :)")
 
-  (time
-   (loop [n 0]
-     (if (< n n-messages)
-       (do
-         ;; input message to kafka
-         (p/input (:job @system) {:key (str "123" n)
-                                  :value {:command "move"
-                                          :args ["left"]}})
-         (recur (inc n))))))
+    (time
+     (loop [n 0]
+       (if (< n n-messages)
+         (do
+           ;; input message to kafka
+           (p/input (:job @system) {:key (str "123" n)
+                                    :value {:command "move"
+                                            :args ["left"]}})
+           (recur (inc n))))))
 
-  (when  @(future
-            ;; 5 seconds is probably too much, but it is safe
-            (Thread/sleep 5000)
-            (println (p/fetch-all (get-in @system [:job :redis])
-                                  (get-in @system [:job :writer :task-map :kafka/topic])))
-            ;; stop everything
-            (stream/stop system))
-    (System/exit 0))
+    (when  @(future
+              ;; 5 seconds is probably too much, but it is safe
+              (Thread/sleep 5000)
+              (println (p/fetch-all (get-in @system [:job :redis])
+                                    (get-in @system [:job :writer :task-map :kafka/topic])))
+              ;; stop processing
+              (stream/kill-jobs system)
+              ;; stop everything
+              (stream/stop system))
+      (System/exit 0)))
 
 
 
