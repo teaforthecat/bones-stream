@@ -84,4 +84,4 @@
   ;; see the output printed to the repl (via the "outputter") with (ms/consume println outputter)
   ;; {:topic bones.stream.core-test..my-inc, :partition 0, :key 123456, :message {:command move, :args [left up]}, :offset 0}
 
-  )
+  ))
