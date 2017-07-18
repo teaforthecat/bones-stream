@@ -5,16 +5,16 @@
             [com.stuartsierra.component :as component]
             [bones.stream.protocols :as p]))
 
-
-;; the default spec could be left here out but this provides an example
+;; the default spec could be left out here but this provides an example
 (def redi (redis/map->Redis {:spec {:host "127.0.0.1" :port 6379}}))
+(def channel "testabc")
 
 (deftest pubsub
   (testing "pubsub serialization"
     (let [stream (ms/stream)
-          _ (p/subscribe redi "test123" stream)
-          _ (p/publish redi "test123" {:abc 123})
-          result (ms/take! stream)]
+          _ (p/subscribe redi channel stream)
+          _ (p/publish redi channel {:abc 123})
+          result (ms/try-take! stream :closed 1000 :timeout)]
       (is (= {:abc 123} @result)))))
 
 

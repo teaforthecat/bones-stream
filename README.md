@@ -54,6 +54,7 @@ same channel that the task is configured to publish to.
 
 ## Tests
 
+    docker-compose up -d
     lein test
     
 There is also a "test" in "production configuration". Try it with these commands.

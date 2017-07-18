@@ -19,7 +19,6 @@
 ;; create global state
 (def system (atom {}))
 
-
 (deftest main-usage
 
   (let [job (jobs/series-> {}
@@ -45,15 +44,16 @@
 
     ;; a stream to connect output to a function
     (def outputter (ms/stream))
+    (def delayed-result (atom []))
 
     ;; connect stream to a function
     ;; prints to stdout
-    (ms/consume println outputter)
+    ;; (ms/consume println outputter)
+    (ms/consume (fn [m] (swap! delayed-result conj m)) outputter)
 
     ;; subscribe to redis pub/sub channel and send it to a stream
     (p/output pipeline outputter)
 
-    (ms/put! outputter "subscription printer is working :)")
 
     (time
      (loop [n 0]
@@ -65,20 +65,23 @@
                                       :args ["left"]}})
            (recur (inc n))))))
 
-    (when  @(future
-              ;; 5 seconds is probably too much, but it is safe
-              (Thread/sleep 5000)
-              ;; close redis subscriber and kafka publisher
-              (component/stop pipeline)
-              ;; stop processing
-              (stream/kill-jobs system)
-              ;; stop everything
-              (stream/stop system))
-      (println "main-usage completed")))
+    ;; way to much time to process
+    (Thread/sleep 5000)
+
+    (let [result @delayed-result]
+      ;; all messages have been received
+      (is (= n-messages (count result)))
+      ;; they passed through the ::my-inc function
+      (is (= ["left" "up"] (get-in (first result) [:message :args] ))))
+    ;; close redis subscriber and kafka publisher
+    (component/stop pipeline)
+    ;; stop processing
+    (stream/kill-jobs system)
+    ;; stop everything
+    (stream/stop system)
 
 
-
-  ;; see the output printed to the repl (via the "outputter")
+  ;; see the output printed to the repl (via the "outputter") with (ms/consume println outputter)
   ;; {:topic bones.stream.core-test..my-inc, :partition 0, :key 123456, :message {:command move, :args [left up]}, :offset 0}
 
   )
