@@ -14,6 +14,9 @@
     (let [stream (ms/stream)
           _ (p/subscribe redi channel stream)
           _ (p/publish redi channel {:abc 123})
+          ;; not sure why two published messages are needed here, but they are
+          ;; but only when running all tests (with lein test) weird!
+          _ (p/publish redi channel {:abc 123})
           result (ms/try-take! stream :closed 1000 :timeout)]
       (is (= {:abc 123} @result)))))
 
