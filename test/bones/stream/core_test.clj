@@ -66,7 +66,7 @@
            (recur (inc n))))))
 
     ;; way to much time to process
-    (Thread/sleep 5000)
+    (Thread/sleep 10000)
 
     (let [result @delayed-result]
       ;; all messages have been received
