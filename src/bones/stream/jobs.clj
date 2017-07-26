@@ -1,20 +1,11 @@
 (ns bones.stream.jobs
-  (:require [bones.stream.serializer :as serializer]
+  (:require ;; remove these if possible
             [bones.stream.redis :as redis]
             [bones.stream.kafka :as k]
-            [onyx.plugin.core-async]))
+            ;; maybe put this somewhere else:
+            [onyx.plugin.core-async]
+            ))
 
-
-
-;; not sure if this will work
-;; where/when to call this? user only?
-;; 1. the ::serfun needs to resolve
-;; 2. they need to match
-;; 3. provide :kafka/serializer-fn to override
-(defn serialization-format [fmt]
-  {:pre (some #{fmt} #{:json :json-verbose :msgpack :json-plain})}
-  (def serfun (serializer/encoder fmt))
-  (def unserfun (serializer/decoder fmt)))
 
 ;; Task functions
 ;; these function merge sensible defaults with configuration data
@@ -24,22 +15,23 @@
   (with-meta
     (merge {:onyx/name :bones/input
             :onyx/type :input
-            :onyx/fn ::k/fix-key ;; preprocessor
+            :onyx/fn bones.stream.kafka/fix-key ;; preprocessor
             :onyx/medium :kafka
             :onyx/plugin :onyx.plugin.kafka/read-messages
             :onyx/max-peers 1 ;; for read exactly once
             :onyx/batch-size 1
             :kafka/zookeeper "localhost:2181"
             ;; :kafka/topic "default-topic"
-            :kafka/deserializer-fn ::unserfun
+            :kafka/deserializer-fn :bones.stream.serializer/de-msgpack
             :kafka/offset-reset :latest
             :kafka/wrap-with-metadata? true
             }
-           conf)
+           (dissoc conf :kafka/serializer-fn))
     ;; meta is used by the pipeline to build an input function
     {:bones/service :kafka
      ;; work around. can't set this on the input task, onyx will complain :(
-     :kafka/serializer-fn (or (:kafka/serializer-fn conf) ::serfun)}
+     :kafka/serializer-fn (or (:kafka/serializer-fn conf)
+                              :bones.stream.serializer/en-msgpack)}
     ))
 
 
@@ -47,10 +39,10 @@
   (with-meta
     (merge {:onyx/name :bones/output
             :onyx/type :output
-            :onyx/fn ::redis/redis-write
+            :onyx/fn bones.stream.redis/redis-write
             :onyx/medium :function
             :onyx/plugin :onyx.peer.function/function
-            ;; the SECOND param sent to ::redis-write
+            ;; the SECOND param sent to bones.stream.redis/redis-write
             ;; :redis/channel "default-topic"
             :redis/spec {:host "127.0.0.1" :port 6379}
             :onyx/params [:redis/spec :redis/channel]
@@ -110,7 +102,9 @@
    (input conf :kafka {}))
   ([conf _ opts]
    (fn [job]
-     (let [task-conf (merge opts (:bones/input conf))]
+     (let [task-conf (merge {:kafka/topic "bones-input"}
+                            (:bones/input conf)
+                            opts)]
        (-> job
            (update :workflow conj [:bones/input])
            (update :catalog conj (kafka-input-task task-conf))
@@ -126,7 +120,9 @@
    (output conf :redis {}))
   ([conf _ opts]
    (fn [job]
-     (let [task-conf (merge opts (:bones/output conf))]
+     (let [task-conf (merge {:redis/channel "bones-output"}
+                            (:bones/output conf)
+                            opts)]
        (-> job
            (update :workflow append-task :bones/output)
            (update :catalog conj (redis-output-task task-conf)))))))

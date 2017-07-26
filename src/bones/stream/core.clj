@@ -18,7 +18,6 @@
 (defn build-system [sys config]
   ;; sets the vars that are used by onyx plugins
   ;; config here is a map. If it is a component it will not be started at this point.
-  (jobs/serialization-format (get-in config [:stream :serialization-format] :msgpack))
   (swap! sys #(-> %
                   (assoc :conf config)
                   (assoc :peer-group (component/using (peer-group/map->Peers {}) [:conf])))))

@@ -81,6 +81,9 @@
                    (map (partial p/fetch cmp))
                    rkeys))))))
 
+(def fetch p/fetch)
+(def fetch-all p/fetch-all)
+
 (defmethod clojure.core/print-method Redis
   [system ^java.io.Writer writer]
   (.write writer "#<bones.stream.redis/Redis>"))

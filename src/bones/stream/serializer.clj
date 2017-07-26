@@ -41,15 +41,29 @@
 (defmethod decoder :transit
   [data-format]
   (fn [bytes]
-    (-> bytes
-        (ByteArrayInputStream.)
-        (transit/reader data-format)
-        (transit/read))))
+    (if bytes ;; nil is allowed for kafka log compaction
+      (-> bytes
+          (ByteArrayInputStream.)
+          (transit/reader data-format)
+          (transit/read)))))
 
 (defmethod decoder :json-plain
   [data-format]
   (fn [data]
     (json/read-str (apply str (map char data)))))
+
+;; these are here just because transit has them
+(def en-json-transit (encoder :json))
+(def de-json-transit (decoder :json))
+(def en-json-verbose (encoder :json-verbose))
+(def de-json-verbose (decoder :json-verbose))
+;; I really only see these as interesting options
+;; - msgpack for compression
+;; - json-plain for sharing data
+(def en-msgpack (encoder :msgpack))
+(def de-msgpack (decoder :msgpack))
+(def en-json-plain (encoder :json-plain))
+(def de-json-plain (decoder :json-plain))
 
 (comment
   (methods encoder)
