@@ -36,8 +36,7 @@
     (let [{:keys [workflow catalog lifecycles]} ((jobs/input {} :kafka)
                                                  {:workflow []})]
       (is (= [[:bones/input]] workflow))
-      ;; this is bad: this will need to be in the docs
-      (is (= nil (:kafka/topic (first catalog))))))
+      (is (= "bones-input" (:kafka/topic (first catalog))))))
   (testing "redis-output-task with channel option in conf"
     (let [{:keys [workflow catalog lifecycles]} ((jobs/output {:bones/output {:redis/channel "cba"}}
                                                               :redis)
@@ -52,8 +51,7 @@
   (testing "redis-output-task"
     (let [{:keys [workflow catalog lifecycles]} ((jobs/output {} :redis)
                                                  {:workflow []})]
-      ;; this is bad:
-      (is (= nil (:redis/channel (first catalog)))))))
+      (is (= "bones-output" (:redis/channel (first catalog)))))))
 
 
 (deftest helpers
@@ -76,7 +74,7 @@
 (deftest job-builders
   (testing "single function job (41 becomes 42)"
     (let [job (jobs/series-> {}
-                              (jobs/input :kafka)
+                              (jobs/input :kafka {:serialization-format :json-plain})
                               (jobs/function ::my-inc)
                               (jobs/output :dummy))]
 

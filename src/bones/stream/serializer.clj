@@ -50,7 +50,8 @@
 (defmethod decoder :json-plain
   [data-format]
   (fn [data]
-    (json/read-str (apply str (map char data)))))
+    (if data
+      (json/read-str (apply str (map char data))))))
 
 ;; these are here just because transit has them
 (def en-json-transit (encoder :json))

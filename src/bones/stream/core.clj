@@ -29,13 +29,13 @@
   (stop-systems sys :peer-group))
 
 (defn submit-job [sys job]
-  (peer-group/submit-job (:peer-group @sys) job))
+  (swap! sys update :peer-group peer-group/submit-job job))
+
+(defn kill-jobs [sys]
+  (swap! sys update :peer-group peer-group/kill-jobs))
 
 (defn pipeline [job]
   (component/start (pipelines/pipeline job)))
-
-(defn kill-jobs [sys]
-  (peer-group/kill-jobs (:peer-group @sys)))
 
 (comment
 

@@ -5,6 +5,7 @@
             [manifold.stream :as ms]
             [com.stuartsierra.component :as component]
             [bones.stream.protocols :as p]
+            [bones.stream.serializer] ;; for onyx to resolve fns
             [bones.stream.jobs :as jobs]))
 
 
@@ -24,8 +25,6 @@
            job (jobs/series-> {}
                               (jobs/input :kafka)
                               (jobs/output :redis {:redis/channel topic}))
-           ;; this gets called in core/build-system
-           _ (jobs/serialization-format :msgpack)
            pipe (component/start (pipelines/pipeline job))
            stream (ms/stream)]
 

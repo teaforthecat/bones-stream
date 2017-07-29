@@ -11,35 +11,50 @@
 ;; these function merge sensible defaults with configuration data
 ;; all values can be overridden by configured builders below
 
-(defn kafka-input-task [conf]
-  (with-meta
-    (merge {:onyx/name :bones/input
-            :onyx/type :input
-            :onyx/fn bones.stream.kafka/fix-key ;; preprocessor
-            :onyx/medium :kafka
-            :onyx/plugin :onyx.plugin.kafka/read-messages
-            :onyx/max-peers 1 ;; for read exactly once
-            :onyx/batch-size 1
-            :kafka/zookeeper "localhost:2181"
-            ;; :kafka/topic "default-topic"
-            :kafka/deserializer-fn :bones.stream.serializer/de-msgpack
-            :kafka/offset-reset :latest
-            :kafka/wrap-with-metadata? true
-            }
-           (dissoc conf :kafka/serializer-fn))
-    ;; meta is used by the pipeline to build an input function
-    {:bones/service :kafka
-     ;; work around. can't set this on the input task, onyx will complain :(
-     :kafka/serializer-fn (or (:kafka/serializer-fn conf)
-                              :bones.stream.serializer/en-msgpack)}
-    ))
+(comment
 
+  (def  ser-format :msgpack)
+  (def keymkr #(->> %2 name (str %1) (keyword "bones.stream.serializer")))
+  )
+
+(defn serfun [frmt]
+  ;; input :msgpack -> [:bones.stream.serializer/en-msgpack :bones.stream.serializer/de-msgpack ]
+  (map #(->> %2 name (str %1) (keyword "bones.stream.serializer"))
+       ["en-" "de-"]
+       [frmt frmt]))
+
+(defn kafka-input-task [conf]
+  ;; serialization format is a shortcut offered to reduce configuration
+  ;; to override set :kafka/deserializer-fn and :kafka/serializer-fn
+  ;; the default is msgpack
+  (let [ser-format (get conf :serialization-format :msgpack) ;; one of :msgpack,:json
+        [sfn-kw dfn-kw] (serfun ser-format)]
+    (with-meta
+      (merge {:onyx/name :bones/input
+              :onyx/type :input
+              ;; preprocessor fn
+              :onyx/fn (->> ser-format name (str "fix-key-") (keyword "bones.stream.kafka"))
+              :onyx/medium :kafka
+              :onyx/plugin :onyx.plugin.kafka/read-messages
+              :onyx/max-peers 1 ;; for read exactly once
+              :onyx/batch-size 1
+              :kafka/zookeeper "localhost:2181"
+              ;; :kafka/topic "default-topic"
+              :kafka/deserializer-fn :bones.stream.serializer/de-msgpack
+              :kafka/offset-reset :latest
+              :kafka/wrap-with-metadata? true
+              }
+             (dissoc conf :kafka/serializer-fn :serialization-format))
+      ;; meta is used by the pipeline to build an input function
+      {:bones/service :kafka
+       ;; work around. can't set this on the input task, onyx will complain :(
+       :kafka/serializer-fn (or (:kafka/serializer-fn conf) sfn-kw)})))
 
 (defn redis-output-task [conf]
   (with-meta
     (merge {:onyx/name :bones/output
             :onyx/type :output
-            :onyx/fn bones.stream.redis/redis-write
+            :onyx/fn :bones.stream.redis/redis-write
             :onyx/medium :function
             :onyx/plugin :onyx.peer.function/function
             ;; the SECOND param sent to bones.stream.redis/redis-write

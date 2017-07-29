@@ -69,13 +69,10 @@
                  :windowing-env windowing-env))))
   (stop [cmp]
     (let [peer-config (get-in cmp [:conf :stream :peer-config])
-          {:keys [producer
-                  job-ids
+          {:keys [job-ids
                   windowing-env
                   peer-group
                   peers]} cmp]
-      ;; stop accepting messages
-      (if (:producer producer) (.close (:producer producer)))
       ;; stop the peers
       (if peers (onyx.api/shutdown-peers peers))
       ;; stop the peer manager
@@ -83,7 +80,6 @@
       ;; stop bookeeper
       (if windowing-env (onyx.api/shutdown-env windowing-env))
       (assoc cmp
-             :producer nil
              :job-ids nil
              :windowing-env nil
              :peer-group nil
@@ -92,13 +88,17 @@
   JobManager
   (submit-job [cmp job]
     (let [peer-config (get-in cmp [:conf :stream :peer-config])
-          job-id (onyx.api/submit-job peer-config job)]
-      (update cmp :job-ids conj job-id)))
+          result (onyx.api/submit-job peer-config job)]
+      (if (:success? result)
+        (update cmp :job-ids conj (:job-id result))
+        (update cmp :failed-submit-job result))))
   ;; may have to parse output of onyx.api/subscribe-to-log to get current running jobs
   (kill-jobs [cmp]
     (let [peer-config (get-in cmp [:conf :stream :peer-config])
-          job-ids (:job-ids cmp)]
+          job-ids (:job-ids cmp)
+          ]
       (if (not (empty? job-ids))
+        ;; kill-job always returns true
         (map (partial onyx.api/kill-job peer-config) job-ids))
       (assoc cmp :job-ids nil))))
 

@@ -4,6 +4,7 @@
             [bones.conf :as conf]
             [bones.stream
              [core :as stream]
+             [serializer] ;; for onyx to resolve fns
              [peer-group :as peer-group]
              [jobs :as jobs]
              [protocols :as p]]
@@ -19,6 +20,13 @@
 ;; create global state
 (def system (atom {}))
 
+(def job (jobs/series-> {}
+                        (jobs/input :kafka {:kafka/topic "bones.stream.core-test..my-inc" })
+                        (jobs/function ::my-inc)
+                        (jobs/output :redis {:redis/channel "bones.stream.core-test..my-inc"})))
+
+(def pipeline (stream/pipeline job))
+
 (deftest main-usage
 
   (let [job (jobs/series-> {}
@@ -30,7 +38,7 @@
     (stream/build-system system
                          (conf/map->Conf {:conf-files ["resources/dev-config.edn"]}))
 
-    ;; start onyx peers, connect to redis, kafka
+    ;; start onyx peers
     (stream/start system)
     ;; wait for onyx to start because it is configured to seek latest offset
     ;; 5 seconds is probably too much, but it is safe
@@ -40,7 +48,7 @@
 
     ;; submit-job to start pulling segments from kafka
     (stream/submit-job system job)
-
+    (get-in @system [:peer-group :job-ids])
 
     ;; a stream to connect output to a function
     (def outputter (ms/stream))
@@ -48,12 +56,15 @@
 
     ;; connect stream to a function
     ;; prints to stdout
-    ;; (ms/consume println outputter)
+    (ms/consume println outputter)
     (ms/consume (fn [m] (swap! delayed-result conj m)) outputter)
 
     ;; subscribe to redis pub/sub channel and send it to a stream
     (p/output pipeline outputter)
 
+
+    ;; idk
+    (Thread/sleep 1000)
 
     (time
      (loop [n 0]
@@ -67,15 +78,17 @@
 
     ;; way to much time to process
     (Thread/sleep 10000)
-
     (let [result @delayed-result]
       ;; all messages have been received
       (is (= n-messages (count result)))
+      ;; key was deserialized
+      (is (= "1230" (get-in (first result) [:key])))
       ;; they passed through the ::my-inc function
       (is (= ["left" "up"] (get-in (first result) [:message :args] ))))
     ;; close redis subscriber and kafka publisher
     (component/stop pipeline)
     ;; stop processing
+    ;; FIXME TODO kill jobs is still not working....
     (stream/kill-jobs system)
     ;; stop everything
     (stream/stop system)
