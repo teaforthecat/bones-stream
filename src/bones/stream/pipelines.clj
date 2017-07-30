@@ -9,12 +9,18 @@
 (defrecord KafkaInput [task-map]
   component/Lifecycle
   (start [cmp]
-    (let [writer (k/writer task-map)]
+    (let [serfun (:kafka/serializer-fn (meta task-map))
+          with-serfun (assoc task-map
+                             :kafka/serializer-fn serfun)
+          writer (k/writer with-serfun)]
       (assoc cmp
              :producer (:producer writer)
              :kafka/topic (:kafka/topic task-map)
              ;; work around. can't set this on the input task, onyx will complain :(
-             :kafka/serializer (kw->fn (:kafka/serializer-fn (meta task-map))))))
+             ;;; this is used to turn both key and value into bytes before kafka sees it
+             ;; could try setting :kafka/key-serializer-fn also
+             :kafka/serializer (kw->fn (:kafka/serializer-fn (meta task-map)))
+             )))
   (stop [cmp]
     (.close (:producer cmp))
     (assoc cmp

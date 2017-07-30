@@ -11,12 +11,6 @@
 ;; these function merge sensible defaults with configuration data
 ;; all values can be overridden by configured builders below
 
-(comment
-
-  (def  ser-format :msgpack)
-  (def keymkr #(->> %2 name (str %1) (keyword "bones.stream.serializer")))
-  )
-
 (defn serfun [frmt]
   ;; input :msgpack -> [:bones.stream.serializer/en-msgpack :bones.stream.serializer/de-msgpack ]
   (map #(->> %2 name (str %1) (keyword "bones.stream.serializer"))
@@ -25,7 +19,7 @@
 
 (defn kafka-input-task [conf]
   ;; serialization format is a shortcut offered to reduce configuration
-  ;; to override set :kafka/deserializer-fn and :kafka/serializer-fn
+  ;; to override set :kafka/deserializer-fn and :kafka/serializer-fn (must match of course!)
   ;; the default is msgpack
   (let [ser-format (get conf :serialization-format :msgpack) ;; one of :msgpack,:json
         [sfn-kw dfn-kw] (serfun ser-format)]
@@ -44,7 +38,8 @@
               :kafka/offset-reset :latest
               :kafka/wrap-with-metadata? true
               }
-             (dissoc conf :kafka/serializer-fn :serialization-format))
+             (dissoc conf :kafka/serializer-fn :serialization-format) ;; illegal
+             {:kafka/deserializer-fn  (or (:kafka/deserializer-fn conf) dfn-kw)})
       ;; meta is used by the pipeline to build an input function
       {:bones/service :kafka
        ;; work around. can't set this on the input task, onyx will complain :(

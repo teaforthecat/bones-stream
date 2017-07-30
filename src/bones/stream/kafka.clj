@@ -71,7 +71,9 @@
     provide:
         :kafka/zookeeper host:port
         :kafka/topic is optional as it can also be in the data sent to `send-sync!'
-        :kafka/serializer-fn should match the :kafka/deserializer-fn"
+    serialization is set on the input task map and read in KafkaInput#produce
+        "
+
   [conf]
   (let [kafka-args (select-keys conf [:kafka/topic
                                       :kafka/zookeeper
@@ -82,12 +84,22 @@
                                       :kafka/producer-opts])]
     (ok/write-messages {:onyx.core/task-map
                         (merge
-                         {:kafka/zookeeper "127.0.0.1:2181"
-                          :kafka/serializer-fn :bones.stream.serializer/de-msgpack}
+                         {:kafka/zookeeper "127.0.0.1:2181"}
                          kafka-args)})))
 
 (defn produce [prdcr topic serializer-fn msg]
-  (send-sync! prdcr (merge {:topic topic}
-                           msg ;; may override topic or add partition
-                           {:key (some-> msg :key serializer-fn)
-                            :value (some-> msg :value serializer-fn)})))
+  ;; assuming a key is always present
+  ;; enforcing  key and value to get the same serializer
+  (let [ser-msg (-> {:topic topic}
+                    (merge msg) ;; may override :topic or add :partition
+                    (update :key serializer-fn)
+                    (update :value serializer-fn))]
+    (send-sync! prdcr ser-msg)))
+
+(comment
+
+  (bones.stream.serializer/de-msgpack
+   (bones.stream.serializer/en-json-plain {"evolution_account_id" 123, "src" "wr-admin"}))
+
+
+  )
