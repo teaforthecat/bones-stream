@@ -34,12 +34,12 @@
               :onyx/batch-size 1
               :kafka/zookeeper "localhost:2181"
               ;; :kafka/topic "default-topic"
-              :kafka/deserializer-fn :bones.stream.serializer/de-msgpack
+              :kafka/deserializer-fn (or (:kafka/deserializer-fn conf) dfn-kw)
               :kafka/offset-reset :latest
               :kafka/wrap-with-metadata? true
               }
-             (dissoc conf :kafka/serializer-fn :serialization-format) ;; illegal
-             {:kafka/deserializer-fn  (or (:kafka/deserializer-fn conf) dfn-kw)})
+             (dissoc conf :kafka/serializer-fn :serialization-format) ;; illegal keys
+             )
       ;; meta is used by the pipeline to build an input function
       {:bones/service :kafka
        ;; work around. can't set this on the input task, onyx will complain :(

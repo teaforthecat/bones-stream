@@ -87,14 +87,8 @@
                          {:kafka/zookeeper "127.0.0.1:2181"}
                          kafka-args)})))
 
-(defn produce [prdcr topic serializer-fn msg]
-  ;; assuming a key is always present
-  ;; enforcing  key and value to get the same serializer
-  (let [ser-msg (-> {:topic topic}
-                    (merge msg) ;; may override :topic or add :partition
-                    (update :key serializer-fn)
-                    (update :value serializer-fn))]
-    (send-sync! prdcr ser-msg)))
+(defn produce [prdcr msg]
+  (send-sync! prdcr msg))
 
 (comment
 

@@ -1,5 +1,7 @@
 language: clojure
-script: lein test
+# not sure why core-test needs to run alone first, weird
+# this allows the tests to pass on Travis
+script: lein test bones.stream.core-test && lein test
 cache:
   directories:
     - $HOME/.m2

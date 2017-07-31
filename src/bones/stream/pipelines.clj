@@ -27,10 +27,14 @@
            :producer nil))
   p/Input
   (input [cmp msg]
-    (k/produce (:producer cmp)
-               (:kafka/topic cmp)
-               (:kafka/serializer cmp)
-               msg)))
+    ;; assuming a key is always present
+    ;; enforcing  key and value to get the same serializer
+    (let [{:keys [:producer :kafka/topic :kafka/serializer]} cmp
+          adj-msg (-> msg
+                      (update :topic (fnil identity topic))
+                      (update :key   serializer)
+                      (update :value serializer))]
+      (k/produce (:producer cmp) adj-msg))))
 
 (defrecord RedisOutput [task-map redi]
   component/Lifecycle
