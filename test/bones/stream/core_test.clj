@@ -11,6 +11,7 @@
             [manifold.stream :as ms]
             [com.stuartsierra.component :as component]))
 
+;; silly example function
 (defn my-inc [segment]
   ;; has keys :topic, :partition, :offset, :key, :message
   (update-in segment [:message :args] conj "up"))
@@ -19,13 +20,6 @@
 
 ;; create global state
 (def system (atom {}))
-
-(def job (jobs/series-> {}
-                        (jobs/input :kafka {:kafka/topic "bones.stream.core-test..my-inc" })
-                        (jobs/function ::my-inc)
-                        (jobs/output :redis {:redis/channel "bones.stream.core-test..my-inc"})))
-
-(def pipeline (stream/pipeline job))
 
 (defn build-system [ftest & addt]
   (stream/build-system system
@@ -37,20 +31,22 @@
 
 (deftest main-usage
 
-  (let [job (jobs/series-> {}
+  (let [;build onyx job
+        job (jobs/series-> {} ;; empty configuration for simple job with defaults
                            (jobs/input :kafka {:kafka/topic "bones.stream.core-test..my-inc" })
                            (jobs/function ::my-inc)
                            (jobs/output :redis {:redis/channel "bones.stream.core-test..my-inc"}))
+        ;; connect to kafka and redis
         pipeline (stream/pipeline job)
         ;; a stream to connect output to a function
         outputter (ms/stream)
+        ;; an atom to collect results
         delayed-result (atom [])]
 
     ;; start onyx peers
     (stream/start system)
-    ;; wait for onyx to start because it is configured to seek latest offset
-    ;; 5 seconds is probably too much, but it is safe
-    ;; peers need to be running in order for submit-job to succeed
+    ;; wait for onyx to start because the default is to seek latest offset
+    ;; 5 seconds is probably too much (or too little?)
     (Thread/sleep 5000)
 
 
@@ -58,28 +54,31 @@
     (stream/submit-job system job)
 
     ;; connect stream to a function
-    ;; prints to stdout
+    ;; prints to stdout for fun
     (ms/consume println outputter)
+    ;; collect results
     (ms/consume (fn [m] (swap! delayed-result conj m)) outputter)
 
     ;; subscribe to redis pub/sub channel and send it to a stream
     (p/output pipeline outputter)
 
 
-    ;; idk timing might be why this tests fails in travis-ci
+    ;; idk timing might be why this tests fails in travis-ci (on the first run only)
     (Thread/sleep 1000)
 
     (time
      (loop [n 0]
        (if (< n n-messages)
          (do
-           ;; input message to kafka
+           ;; input message to kafka (to be picked up by the job)
            (p/input pipeline {:key (str "123" n)
                               :value {:command "move"
                                       :args ["left"]}})
            (recur (inc n))))))
 
+    ;; idk wait for async things to happen
     (Thread/sleep 1000)
+
     (let [result @delayed-result]
       ;; all messages have been received
       (is (= n-messages (count result)))
@@ -87,6 +86,7 @@
       (is (= "1230" (get-in (first result) [:key])))
       ;; they passed through the ::my-inc function
       (is (= ["left" "up"] (get-in (first result) [:message :args] ))))
+
     ;; close redis subscriber and kafka publisher
     (component/stop pipeline)
     ;; stop processing
