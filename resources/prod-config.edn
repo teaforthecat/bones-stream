@@ -1,0 +1,4 @@
+{:stream
+ {:peer-config
+  ;; it is recommended to use aeron in a separate process for production
+ {:onyx.messaging.aeron/embedded-driver? false}}}

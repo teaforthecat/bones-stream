@@ -63,7 +63,7 @@ There is also a "test" in "production configuration". Try it with these commands
     # start first
     docker-compose up -d 
     # start second
-    java -cp target/stream-0.0.3-standalone.jar lib-onyx.media_driver 
+    java -cp target/stream-0.0.3-standalone.jar lib_onyx.media_driver 
     # start third
     java -cp target/stream-0.0.3-standalone.jar bones.stream.core_test 
 

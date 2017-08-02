@@ -27,16 +27,24 @@
 
 (def pipeline (stream/pipeline job))
 
+(defn build-system [ftest & addt]
+  (stream/build-system system
+                       (conf/map->Conf {:conf-files (into ["resources/dev-config.edn"]
+                                                          addt)}))
+  (ftest))
+
+(use-fixtures :each build-system)
+
 (deftest main-usage
 
   (let [job (jobs/series-> {}
                            (jobs/input :kafka {:kafka/topic "bones.stream.core-test..my-inc" })
                            (jobs/function ::my-inc)
                            (jobs/output :redis {:redis/channel "bones.stream.core-test..my-inc"}))
-        pipeline (stream/pipeline job)]
-
-    (stream/build-system system
-                         (conf/map->Conf {:conf-files ["resources/dev-config.edn"]}))
+        pipeline (stream/pipeline job)
+        ;; a stream to connect output to a function
+        outputter (ms/stream)
+        delayed-result (atom [])]
 
     ;; start onyx peers
     (stream/start system)
@@ -48,11 +56,6 @@
 
     ;; submit-job to start pulling segments from kafka
     (stream/submit-job system job)
-    (get-in @system [:peer-group :job-ids])
-
-    ;; a stream to connect output to a function
-    (def outputter (ms/stream))
-    (def delayed-result (atom []))
 
     ;; connect stream to a function
     ;; prints to stdout
@@ -63,7 +66,7 @@
     (p/output pipeline outputter)
 
 
-    ;; idk
+    ;; idk timing might be why this tests fails in travis-ci
     (Thread/sleep 1000)
 
     (time
@@ -76,8 +79,7 @@
                                       :args ["left"]}})
            (recur (inc n))))))
 
-    ;; way to much time to process
-    (Thread/sleep 10000)
+    (Thread/sleep 1000)
     (let [result @delayed-result]
       ;; all messages have been received
       (is (= n-messages (count result)))
@@ -88,7 +90,6 @@
     ;; close redis subscriber and kafka publisher
     (component/stop pipeline)
     ;; stop processing
-    ;; FIXME TODO kill jobs is still not working....
     (stream/kill-jobs system)
     ;; stop everything
     (stream/stop system)
@@ -98,3 +99,9 @@
   ;; {:topic bones.stream.core-test..my-inc, :partition 0, :key 123456, :message {:command move, :args [left up]}, :offset 0}
 
   ))
+
+(defn -main []
+  ;; empty form to be called in lieu of a test for the build-system fixture
+  (build-system #() "resources/prod-config.edn")
+  (main-usage)
+  (System/exit 0))
