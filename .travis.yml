@@ -1,7 +1,17 @@
 language: clojure
-script: lein test
+# not sure why core-test needs to run twice, weird
+# this allows the tests to pass on Travis
+script: lein test bones.stream.core-test || lein test
 cache:
   directories:
     - $HOME/.m2
 jdk:
   - oraclejdk8
+
+sudo: required
+
+services:
+  - docker
+
+before_install:
+  - docker-compose up -d

@@ -1,11 +1,15 @@
 (ns bones.stream.core-test
   (:gen-class)
-  (:require [bones.conf :as conf]
+  (:require [clojure.test :refer [deftest testing is are use-fixtures run-tests]]
+            [bones.conf :as conf]
             [bones.stream
              [core :as stream]
+             [serializer] ;; for onyx to resolve fns
+             [peer-group :as peer-group]
              [jobs :as jobs]
              [protocols :as p]]
-            [manifold.stream :as ms]))
+            [manifold.stream :as ms]
+            [com.stuartsierra.component :as component]))
 
 (defn my-inc [segment]
   ;; has keys :topic, :partition, :offset, :key, :message
@@ -16,56 +20,81 @@
 ;; create global state
 (def system (atom {}))
 
+(def job (jobs/series-> {}
+                        (jobs/input :kafka {:kafka/topic "bones.stream.core-test..my-inc" })
+                        (jobs/function ::my-inc)
+                        (jobs/output :redis {:redis/channel "bones.stream.core-test..my-inc"})))
 
-(defn -main []
-  ;; glue components together
-  (stream/build-system system
-                       ;; single-function-job:
-                       ;; kafka -> my-inc -> redis
-                       (jobs/single-function-job ::my-inc)
-                       (conf/map->Conf {:conf-files ["resources/dev-config.edn"]}))
+(def pipeline (stream/pipeline job))
 
-  ;; start onyx job, connect to redis, kafka
-  (stream/start system)
-  ;; wait for onyx to start because it is configured to seek latest offset
-  ;; 5 seconds is probably too much, but it is safe
-  (Thread/sleep 5000)
+(deftest main-usage
+
+  (let [job (jobs/series-> {}
+                           (jobs/input :kafka {:kafka/topic "bones.stream.core-test..my-inc" })
+                           (jobs/function ::my-inc)
+                           (jobs/output :redis {:redis/channel "bones.stream.core-test..my-inc"}))
+        pipeline (stream/pipeline job)]
+
+    (stream/build-system system
+                         (conf/map->Conf {:conf-files ["resources/dev-config.edn"]}))
+
+    ;; start onyx peers
+    (stream/start system)
+    ;; wait for onyx to start because it is configured to seek latest offset
+    ;; 5 seconds is probably too much, but it is safe
+    ;; peers need to be running in order for submit-job to succeed
+    (Thread/sleep 5000)
 
 
-  ;; a stream to connect output to a function
-  (def outputter (ms/stream))
+    ;; submit-job to start pulling segments from kafka
+    (stream/submit-job system job)
+    (get-in @system [:peer-group :job-ids])
 
-  ;; connect stream to a function
-  ;; prints to stdout
-  (ms/consume println outputter)
+    ;; a stream to connect output to a function
+    (def outputter (ms/stream))
+    (def delayed-result (atom []))
 
-  ;; subscribe to redis pub/sub channel
-  ;; connect stream to output
-  (p/output (:job @system) outputter)
+    ;; connect stream to a function
+    ;; prints to stdout
+    (ms/consume println outputter)
+    (ms/consume (fn [m] (swap! delayed-result conj m)) outputter)
 
-  (ms/put! outputter "subscription printer is working :)")
+    ;; subscribe to redis pub/sub channel and send it to a stream
+    (p/output pipeline outputter)
+
+
+    ;; idk
+    (Thread/sleep 1000)
 
     (time
-   (loop [n 0]
-     (if (< n n-messages)
-       (do
-         ;; input message to kafka
-         (p/input (:job @system) {:key (str "123" n)
-                                  :value {:command "move"
-                                          :args ["left"]}})
-         (recur (inc n))))))
+     (loop [n 0]
+       (if (< n n-messages)
+         (do
+           ;; input message to kafka
+           (p/input pipeline {:key (str "123" n)
+                              :value {:command "move"
+                                      :args ["left"]}})
+           (recur (inc n))))))
 
-  ;; keep the current thread that prints going
-  (when  @(future
-            ;; 5 seconds is probably too much, but it is safe
-            (Thread/sleep 5000)
-            ;; stop everything
-            (stream/stop system))
-    (System/exit 0))
+    ;; way to much time to process
+    (Thread/sleep 10000)
+    (let [result @delayed-result]
+      ;; all messages have been received
+      (is (= n-messages (count result)))
+      ;; key was deserialized
+      (is (= "1230" (get-in (first result) [:key])))
+      ;; they passed through the ::my-inc function
+      (is (= ["left" "up"] (get-in (first result) [:message :args] ))))
+    ;; close redis subscriber and kafka publisher
+    (component/stop pipeline)
+    ;; stop processing
+    ;; FIXME TODO kill jobs is still not working....
+    (stream/kill-jobs system)
+    ;; stop everything
+    (stream/stop system)
 
 
-
-  ;; see the output printed to the repl (via the "outputter")
+  ;; see the output printed to the repl (via the "outputter") with (ms/consume println outputter)
   ;; {:topic bones.stream.core-test..my-inc, :partition 0, :key 123456, :message {:command move, :args [left up]}, :offset 0}
 
-  )
+  ))

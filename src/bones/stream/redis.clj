@@ -18,21 +18,11 @@
 
 (def listeners (atom []))
 
-(defrecord Redis [conf spec channel-prefix]
+(defrecord Redis [spec]
   component/Lifecycle
-  ;; idempontent start/stop not needed
-  (start [cmp]
-    (let [config (get-in cmp [:conf :stream :redis])
-          {:keys [spec channel-prefix]
-           ;; Default spec: {:host \"127.0.0.1\" :port 6379}
-           :or {spec {}
-                ; this must be matched by whatever is writing on the backend
-                channel-prefix "bones-"}} config]
-      (-> cmp
-          (assoc :spec spec)
-          (assoc :channel-prefix channel-prefix))))
+  ;; we don't need to maintain a connection here because carmine maintains a pool
+  ;; of connections, but we do maintain the subscriber streams
   (stop [cmp]
-    ;; is there a better way to do this all at once?
     (map car/close-listener @listeners)
     (reset! listeners [])
     cmp)
@@ -54,8 +44,7 @@
 
   p/MaterializedView
   (write [cmp topic rkey value]
-    (let [{:keys [spec]} cmp
-          result (d/deferred)]
+    (let [result (d/deferred)]
       (d/success! result
         (car/wcar {:spec spec}
                   (if (nil? value)
@@ -67,8 +56,7 @@
                       (car/sadd topic rkey)))))
       result))
   (fetch [cmp rkey]
-    (let [{:keys [spec]} cmp
-          result (d/deferred)]
+    (let [result (d/deferred)]
       ;; todo error handling
       (d/success! result
                   {:key rkey
@@ -76,15 +64,15 @@
                                     (car/get rkey))})
       result))
   (fetch-keys [cmp topic]
-    (let [{:keys [spec]} cmp
-          result (d/deferred)]
+    (let [result (d/deferred)]
       (d/success! result
                   (car/wcar {:spec spec}
                             (car/smembers topic)))
       result))
   (fetch-all [cmp topic]
-    (let [{:keys [spec]} cmp
-          rkeys @(p/fetch-keys cmp topic)]
+    (let [rkeys @(p/fetch-keys cmp topic)]
+      ;; not the most performant thing to do here;
+      ;; this probably deserves a lua script installed to redis for performance
       (ms/reduce conj
                  []
                  (ms/transform
@@ -93,13 +81,17 @@
                    (map (partial p/fetch cmp))
                    rkeys))))))
 
+(def fetch p/fetch)
+(def fetch-all p/fetch-all)
+
 (defmethod clojure.core/print-method Redis
   [system ^java.io.Writer writer]
   (.write writer "#<bones.stream.redis/Redis>"))
 
-(defn redis-write [redi channel message]
+(defn redis-write [spec channel message]
   (debug "redis-write: " channel " " message )
-  (let [k (:key message)
+  (let [redi (->Redis spec)
+        k (:key message)
         v (:message message)]
     (p/write redi channel k v)
     (p/publish redi channel message)))
