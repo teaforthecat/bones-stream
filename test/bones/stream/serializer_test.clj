@@ -10,12 +10,16 @@
   (testing "json format"
     (let [data {:abc 123}
           ser (serializer/encoder :json)
+          deser (serializer/decoder :json)
           ser-data (ser data)]
+      (is (= data (deser ser-data)))
       (is (= "[\"^ \",\"~:abc\",123]" (to-s ser-data)))))
   (testing "json-verbose format"
     (let [data {:abc 123}
           ser (serializer/encoder :json-verbose)
+          deser (serializer/decoder :json-verbose)
           ser-data (ser data)]
+      (is (= data (deser ser-data)))
       (is (= "{\"~:abc\":123}" (to-s ser-data)))))
   (testing "msgpack format"
     (let [data {:abc 123}
@@ -27,5 +31,7 @@
   (testing "json-plain format"
     (let [data {:abc 123}
           ser (serializer/encoder :json-plain)
+          deser (serializer/decoder :json-plain)
           ser-data (ser data)]
+      (is (= {"abc" 123} (deser ser-data)))
       (is (= "{\"abc\":123}" (to-s ser-data))))))

@@ -6,9 +6,13 @@
   :dependencies [#_[org.clojure/clojure "1.9.0-alpha14"]
                  [org.clojure/clojure "1.8.0"] ;; onyx
                  [com.stuartsierra/component "0.3.2"]
+                 [byte-streams "0.2.3"]
 
                  ;; bones deps
                  [bones/conf "0.2.3"]
+
+                 ;; dev profile only?
+                 [org.onyxplatform/onyx-local-rt "0.10.0.0-beta8"]
 
                  [org.onyxplatform/lib-onyx "0.10.0.0"]
                  [org.onyxplatform/onyx "0.10.0-beta10"]

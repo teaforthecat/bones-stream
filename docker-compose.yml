@@ -4,8 +4,8 @@ services:
     image: wurstmeister/zookeeper:3.4.6
     ports:
       - "2181:2181"
-    volumes:
-      - "./tmp/shared/temp/zookeeper:/opt/zookeeper-3.4.6/data"
+    # volumes:
+    #   - "./tmp/shared/temp/zookeeper:/opt/zookeeper-3.4.6/data"
   kafka:
     image: wurstmeister/kafka:0.10.0.1
     environment:
@@ -16,8 +16,8 @@ services:
       - "9092:9092"
     links:
       - zookeeper
-    volumes:
-      - "./tmp/shared/temp/kafka:/kafka"
+    # volumes:
+    #   - "./tmp/shared/temp/kafka:/kafka"
   redis:
     image: 'redis:3.2.4'
     ports:

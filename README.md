@@ -10,6 +10,7 @@ ease the configuration and setup effort. It has the goal of a slim
 API to make getting started as easy as possible. For a quick implementation
 example see [core-test](test/bones/stream/core_test.clj).
 
+[![Build Status](https://travis-ci.org/teaforthecat/bones-stream.svg?branch=master)](https://travis-ci.org/teaforthecat/bones-stream)
 
 ## Deploy
 
@@ -53,9 +54,10 @@ same channel that the task is configured to publish to.
 
 ## Tests
 
+    docker-compose up -d
     lein test
     
-There is also a "test" in "production configuration". These commands
+There is also a "test" in "production configuration". Try it with these commands.
     
     lein uberjar
     # start first
