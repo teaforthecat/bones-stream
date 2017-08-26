@@ -1,4 +1,4 @@
-(defproject bones/stream "0.0.4"
+(defproject bones/stream "0.0.5"
   :description "A spec-driven Onyx compiler"
   :url "https://github.com/teaforthecat/bones-stream"
   :license {:name "Eclipse Public License"
