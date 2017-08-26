@@ -22,7 +22,7 @@
              :kafka/serializer (kw->fn (:kafka/serializer-fn (meta task-map)))
              )))
   (stop [cmp]
-    (.close (:producer cmp))
+    (some-> (:producer cmp) .close)
     (assoc cmp
            :producer nil))
   p/Input

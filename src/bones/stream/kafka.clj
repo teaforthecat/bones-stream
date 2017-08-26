@@ -81,10 +81,14 @@
                                       :kafka/request-size
                                       :kafka/partition
                                       :kafka/no-seal?
-                                      :kafka/producer-opts])]
+                                      :kafka/producer-opts])
+        ;; onyx uses :zookeeper/address so some silly person (me) may try to
+        ;; reuse that key here, when they should have said :kafka/zookeeper
+        ;; also, provide a reasonable default
+        extra-leeway-and-understanding (get conf :zookeeper/address "127.0.0.1:2181")]
     (ok/write-messages {:onyx.core/task-map
                         (merge
-                         {:kafka/zookeeper "127.0.0.1:2181"}
+                         {:kafka/zookeeper extra-leeway-and-understanding}
                          kafka-args)})))
 
 (defn produce [prdcr msg]

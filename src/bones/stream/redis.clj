@@ -36,7 +36,9 @@
   (subscribe [cmp channel stream]
     ; one user/browser connection (through local pool)
     (let [listener
-          (car/with-new-pubsub-listener {:spec spec}
+          ;; with-new-pubsub-listener takes a different map than car/wcar takes
+          ;; not {:spec {:host _ :port _}}, just {:host _ :port _}
+          (car/with-new-pubsub-listener spec
             {channel (message-handler stream)}
             (car/subscribe channel))]
       (swap! listeners conj listener)
